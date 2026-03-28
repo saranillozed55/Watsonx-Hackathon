@@ -9,7 +9,7 @@ app.add_middleware(
     allow_origins=["*"], # * is a wildcard, tells server to accept requests from any website
     allow_credentials=True, # allows frontend to send cookies or ligon information of we add a "login" feature later
     allow_methods=["*"], # tells browser its okay to get(read data) post(to send data), and deletece, etc
-    allow_headers=["*"], #allows frontend to send custom information in the "header" of the request (like API keys)
+    allow_headers=["*"], #allows frontend to send custom information in the "header" of the request (like API)
 )
 
 @app.get("/")
