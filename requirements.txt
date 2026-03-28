@@ -1,1 +1,7 @@
-List of libraries team needs to install
+fastapi
+uvicorn[standard]
+python-dotenv
+pydantic
+ibm-watsonx-ai
+ibm-cloud-sdk-core
+pandas
