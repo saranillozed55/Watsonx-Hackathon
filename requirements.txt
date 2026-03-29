@@ -5,3 +5,5 @@ pydantic
 ibm-watsonx-ai
 ibm-cloud-sdk-core
 pandas
+ibm-watsonx-orchestrate
+requests

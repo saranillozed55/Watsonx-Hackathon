@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI()
+app = FastAPI(
+    servers=[{"url": "http://localhost:8000", "description": "Local development server"}]
+)
 
 
 app.add_middleware(
