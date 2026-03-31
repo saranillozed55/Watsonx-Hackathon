@@ -41,10 +41,11 @@ async def chat_with_agent(request: Request):
         agent_id = os.getenv("AGENT_ID")
         
         # This is the "Phone Number" for your specific IBM Agent
-        url = f"https://api.ibm.com/orchestrate/api/v1/agents/{agent_id}/runs"
+        url = f"{os.getenv('ORCHESTRATE_INSTANCE_URL')}/api/v1/agents/{agent_id}/runs"
 
         headers = {
             "Authorization": f"Bearer {api_key}",
+            "X-IBM-API-Key": api_key,  # <--- ADD THIS LINE
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
@@ -52,6 +53,7 @@ async def chat_with_agent(request: Request):
         payload = {"input_text": user_message}
 
         # Send the message to the cloud
+        print(f"Calling URL: {url}")
         response = requests.post(url, json=payload, headers=headers)
         response.raise_for_status() 
         
