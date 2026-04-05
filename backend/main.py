@@ -35,7 +35,6 @@ def get_iam_token(api_key: str) -> str:
     _cached_token = resp.json()["access_token"]
     return _cached_token
 
-
 # ─── In-memory session store ───────────────────────────────────────────────────
 # Maps session_id → thread_id (IBM Orchestrate conversation thread)
 # In production use Redis or a DB. For hackathon, in-memory is fine.
