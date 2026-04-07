@@ -9,7 +9,7 @@ API_KEY = os.getenv("WATSONX_API_KEY")
 AGENT_ID = os.getenv("AGENT_ID")
 ORCHESTRATE_INSTANCE_URL = os.getenv("ORCHESTRATE_INSTANCE_URL").rstrip("/")
 
-# Step 1: Get IAM token
+# Get IAM token
 iam_response = requests.post(
     "https://iam.cloud.ibm.com/identity/token",
     headers={"Content-Type": "application/x-www-form-urlencoded"},
