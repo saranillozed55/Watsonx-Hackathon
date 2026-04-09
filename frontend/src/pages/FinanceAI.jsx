@@ -199,6 +199,7 @@ export default function FinanceAI() {
   const [chatInput, setChatInput] = useState("");
   const [typing, setTyping] = useState(false);
   const [chatStarted, setChatStarted] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const messagesEndRef = useRef(null);
   const chatTextareaRef = useRef(null);
@@ -214,7 +215,7 @@ export default function FinanceAI() {
     return () => clearInterval(interval);
   }, []);
 
-  function startChat(text) {
+  async function startChat(text) {
     if (!text.trim() || typing) return;
     const userMsg = { id: Date.now(), role: "user", time: getTime(), paragraphs: [text], card: null };
     if (!chatStarted) {
@@ -227,14 +228,49 @@ export default function FinanceAI() {
     setChatInput("");
     if (chatTextareaRef.current) chatTextareaRef.current.style.height = "auto";
     setTyping(true);
-    setTimeout(() => {
-      const resp = getResponse(text);
+
+    try {
+      // Step 1 — get a session ID if we don't have one yet
+      let currentSessionId = sessionId;
+      if (!currentSessionId) {
+        const sessionRes = await fetch("http://localhost:8000/new-session", {
+          method: "POST"
+        });
+        const sessionData = await sessionRes.json();
+        currentSessionId = sessionData.session_id;
+        setSessionId(currentSessionId);
+      }
+
+      // Step 2 — send message to real backend
+      const chatRes = await fetch("http://localhost:8000/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: currentSessionId,
+          message: text
+        })
+      });
+      const chatData = await chatRes.json();
+
       setTyping(false);
       setMessages(prev => [...prev, {
-        id: Date.now() + 1, role: "ai", time: getTime(),
-        paragraphs: resp.text, card: resp.card
+        id: Date.now() + 1,
+        role: "ai",
+        time: getTime(),
+        paragraphs: [chatData.reply],
+        card: null
       }]);
-    }, 1300 + Math.random() * 700);
+
+    } catch (err) {
+      setTyping(false);
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        role: "ai",
+        time: getTime(),
+        paragraphs: ["Sorry, I couldn't connect to the backend. Make sure it's running on port 8000."],
+        card: null
+      }]);
+    }
   }
 
   function autoResize(e) {
