@@ -12,7 +12,6 @@ load_dotenv()
 API_KEY = os.getenv("WATSONX_API_KEY")
 AGENT_ID = os.getenv("AGENT_ID")
 ORCHESTRATE_INSTANCE_URL = os.getenv("ORCHESTRATE_INSTANCE_URL").rstrip("/")
-CHAT_URL = f"{ORCHESTRATE_INSTANCE_URL}/v1/orchestrate/{AGENT_ID}/chat/completions"
 
 app = FastAPI()
 
@@ -23,7 +22,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Token cache ---
 token_cache = {"token": None, "expires_at": 0}
 
 def get_iam_token():
@@ -39,10 +37,8 @@ def get_iam_token():
     token_cache["expires_at"] = time.time() + data["expires_in"]
     return token_cache["token"]
 
-# --- Thread store (per user session) ---
-thread_store = {}  # { session_id: thread_id }
+thread_store = {}
 
-# --- Request/Response models ---
 class ChatRequest(BaseModel):
     session_id: str
     message: str
@@ -52,7 +48,6 @@ class ChatResponse(BaseModel):
     reply: str
     thread_id: str
 
-# --- Routes ---
 @app.get("/")
 def root():
     return {"status": "ok"}
@@ -68,15 +63,21 @@ def chat(req: ChatRequest):
     thread_id = thread_store.get(req.session_id)
 
     body = {
-        "stream": False,
-        "messages": [{"role": "user", "content": req.message}]
+        "message": {"role": "user", "content": req.message},
+        "agent_id": AGENT_ID
     }
     if thread_id:
         body["thread_id"] = thread_id
 
+    url = f"{ORCHESTRATE_INSTANCE_URL}/v1/orchestrate/runs?stream=false"
+
     response = requests.post(
-        CHAT_URL,
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        },
         json=body
     )
 
@@ -85,7 +86,33 @@ def chat(req: ChatRequest):
 
     data = response.json()
     new_thread_id = data.get("thread_id")
+    run_id = data.get("run_id")
     thread_store[req.session_id] = new_thread_id
-    reply = data["choices"][0]["message"]["content"]
 
-    return ChatResponse(session_id=req.session_id, reply=reply, thread_id=new_thread_id)
+    poll_url = f"{ORCHESTRATE_INSTANCE_URL}/v1/orchestrate/runs/{run_id}"
+    for _ in range(30):
+        time.sleep(2)
+        poll_response = requests.get(
+            poll_url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json"
+            }
+        )
+        poll_data = poll_response.json()
+        status = poll_data.get("status")
+        if status == "completed":
+            try:
+                content_list = poll_data["result"]["data"]["message"]["content"]
+                reply = content_list[0].get("text", "No response")
+            except (KeyError, IndexError, TypeError):
+                reply = "No response"
+            return ChatResponse(
+                session_id=req.session_id,
+                reply=reply,
+                thread_id=new_thread_id
+            )
+        elif status == "failed":
+            raise HTTPException(status_code=500, detail="Agent run failed")
+
+    raise HTTPException(status_code=504, detail="Agent timed out")

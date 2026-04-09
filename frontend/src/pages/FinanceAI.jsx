@@ -199,7 +199,7 @@ export default function FinanceAI() {
   const [chatInput, setChatInput] = useState("");
   const [typing, setTyping] = useState(false);
   const [chatStarted, setChatStarted] = useState(false);
-  const [sessionId, setSessionId] = useState(null);
+  const [sessionId, setSessionId] = useState(() => localStorage.getItem("sessionId"));
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const messagesEndRef = useRef(null);
   const chatTextareaRef = useRef(null);
@@ -239,6 +239,7 @@ export default function FinanceAI() {
         const sessionData = await sessionRes.json();
         currentSessionId = sessionData.session_id;
         setSessionId(currentSessionId);
+        localStorage.setItem("sessionId", currentSessionId);
       }
 
       // Step 2 — send message to real backend
@@ -279,12 +280,14 @@ export default function FinanceAI() {
   }
 
   function resetChat() {
+    localStorage.removeItem("sessionId");  // add this line
+    setSessionId(null);
     setChatStarted(false);
     setMessages([]);
     setTyping(false);
     setLinkInput("");
     setChatInput("");
-  }
+}
 
   return (
     <div className="app">
