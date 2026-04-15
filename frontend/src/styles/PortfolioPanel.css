@@ -1,0 +1,219 @@
+/* ── Portfolio Panel ───────────────────────────────────────────────── */
+.pp-wrap {
+  padding: 0 0 1rem;
+}
+
+.pp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.pp-title {
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #666;
+}
+
+.pp-add-btn {
+  font-size: 11px;
+  color: #c9a84c;
+  background: none;
+  border: 0.5px solid rgba(201,168,76,0.35);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.pp-add-btn:hover { background: rgba(201,168,76,0.1); }
+
+/* donut */
+.pp-donut-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.pp-donut {
+  flex-shrink: 0;
+}
+
+.donut-label-top {
+  font-size: 11px;
+  font-weight: 600;
+  fill: #f0ede6;
+  font-family: 'IBM Plex Mono', monospace;
+}
+.donut-label-sub {
+  font-size: 8px;
+  fill: #666;
+  font-family: inherit;
+}
+
+.pp-legend { display: flex; flex-direction: column; gap: 4px; }
+.pp-legend-item { display: flex; align-items: center; gap: 5px; }
+.pp-legend-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.pp-legend-ticker { font-size: 11px; color: #ccc; flex: 1; }
+.pp-legend-pct    { font-size: 11px; color: #666; font-family: 'IBM Plex Mono', monospace; }
+
+/* holdings list */
+.pp-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+
+.pp-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 8px;
+  border-radius: 7px;
+  background: rgba(255,255,255,0.03);
+  border: 0.5px solid rgba(255,255,255,0.07);
+  transition: background 0.15s;
+}
+.pp-item:hover { background: rgba(255,255,255,0.06); }
+
+.pp-item-left { display: flex; align-items: center; gap: 8px; }
+
+.pp-color-bar {
+  width: 3px;
+  height: 28px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.pp-ticker { font-size: 12px; font-weight: 500; color: #f0ede6; }
+.pp-pct    { font-size: 10px; color: #666; margin-top: 1px; }
+
+.pp-item-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.pp-value { font-size: 11px; color: #c9a84c; font-family: 'IBM Plex Mono', monospace; }
+
+.pp-actions { display: flex; gap: 4px; }
+.pp-edit, .pp-del {
+  font-size: 11px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.pp-edit { color: #555; }
+.pp-edit:hover { color: #c9a84c; }
+.pp-del  { color: #555; }
+.pp-del:hover  { color: #e05a5a; }
+
+/* analyze button */
+.pp-analyze-btn {
+  width: 100%;
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #0d0d0d;
+  background: #c9a84c;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.pp-analyze-btn:hover { opacity: 0.85; }
+
+/* empty state */
+.pp-empty {
+  text-align: center;
+  padding: 1rem 0.5rem;
+}
+.pp-empty-icon { font-size: 22px; margin-bottom: 6px; }
+.pp-empty-text { font-size: 12px; color: #ccc; margin-bottom: 4px; font-weight: 500; }
+.pp-empty-sub  { font-size: 11px; color: #555; margin-bottom: 10px; line-height: 1.4; }
+.pp-start-btn {
+  font-size: 11px;
+  color: #c9a84c;
+  background: rgba(201,168,76,0.1);
+  border: 0.5px solid rgba(201,168,76,0.3);
+  border-radius: 5px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+/* add form */
+.pp-add-form { padding-top: 2px; }
+.pp-form-label {
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.pp-ticker-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.pp-preset {
+  font-size: 10px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  border: 0.5px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: #aaa;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.pp-preset:hover { border-color: rgba(201,168,76,0.4); color: #c9a84c; }
+.pp-preset.sel   { border-color: #c9a84c; background: rgba(201,168,76,0.12); color: #c9a84c; }
+
+.pp-input {
+  width: 100%;
+  padding: 7px 10px;
+  margin-bottom: 7px;
+  font-size: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 0.5px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  color: #f0ede6;
+  outline: none;
+  box-sizing: border-box;
+}
+.pp-input:focus { border-color: #c9a84c; }
+.pp-input::placeholder { color: #444; }
+
+/* hide number input arrows */
+.pp-input[type=number]::-webkit-inner-spin-button,
+.pp-input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+.pp-input[type=number] { -moz-appearance: textfield; }
+
+.pp-form-actions { display: flex; gap: 6px; margin-top: 4px; }
+.pp-cancel {
+  flex: 1;
+  padding: 7px;
+  font-size: 12px;
+  background: none;
+  border: 0.5px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  color: #666;
+  cursor: pointer;
+}
+.pp-cancel:hover { color: #aaa; }
+
+.pp-save {
+  flex: 2;
+  padding: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #c9a84c;
+  color: #0d0d0d;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.pp-save:disabled { opacity: 0.3; cursor: default; }
+.pp-save:not(:disabled):hover { opacity: 0.85; }

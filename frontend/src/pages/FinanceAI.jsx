@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import "../styles/FinanceAI.css";
 import OnboardingModal from "../components/OnboardingModal";
+import PortfolioPanel from "../components/PortfolioPanel";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API INTEGRATION — replace each function with your real calls
@@ -59,22 +60,24 @@ async function fetchMarketSnapshot() {
  * }
  */
 async function sendToBackend(sessionId, message) {
+  const storedProfile  = localStorage.getItem("userProfile");
+  const storedHoldings = localStorage.getItem("portfolio");
+ 
   const res = await fetch("http://localhost:8000/chat", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       session_id: sessionId,
       message,
+      profile:  storedProfile  ? JSON.parse(storedProfile)  : null,
+      holdings: storedHoldings ? JSON.parse(storedHoldings) : null,
     }),
   });
-
+ 
   if (!res.ok) {
     const errText = await res.text();
     throw new Error(errText || `Backend error: ${res.status}`);
   }
-
   return await res.json();
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -518,6 +521,10 @@ export default function FinanceAI() {
     const stored = localStorage.getItem("userProfile");
     return stored ? JSON.parse(stored) : null;
   });
+  const [holdings, setHoldings] = useState(() => {
+    const saved = localStorage.getItem("portfolio");
+    return saved ? JSON.parse(saved) : [];
+  });
 
   const msgCounter     = useRef(0);
   const dragCounter    = useRef(0);
@@ -648,19 +655,8 @@ export default function FinanceAI() {
       localStorage.setItem("sessionId", currentSessionId);
     }
 
-    // Prepend profile context to every outgoing message
-    const profileContext = userProfile
-      ? `[User profile — risk: ${userProfile.risk}, goal: ${userProfile.goal}, ` +
-        `horizon: ${userProfile.horizon}` +
-        (userProfile.portfolio ? `, portfolio size: ${userProfile.portfolio}` : "") +
-        `]\n\n`
-      : "";
+    const data = await sendToBackend(currentSessionId, text?.trim() || "");
 
-    const data = await sendToBackend(
-      currentSessionId,
-      profileContext + (text?.trim() || "")
-    );
-    
     setTyping(false);
 
     const rid = ++msgCounter.current;
@@ -696,6 +692,8 @@ export default function FinanceAI() {
   function resetChat() {
   localStorage.removeItem("sessionId");
   localStorage.removeItem("userProfile");
+  localStorage.removeItem("portfolio");
+  setHoldings([]);
   setUserProfile(null);
   setSessionId(null);
   setChatStarted(false);
@@ -762,6 +760,13 @@ export default function FinanceAI() {
             <div className="recent-item" key={i}>{m.paragraphs[0]?.slice(0, 28)}…</div>
           ))}
 
+          <div className="sb-divider" />
+          <PortfolioPanel
+            onPortfolioChange={(newHoldings, analyzeMessage) => {
+              setHoldings(newHoldings);
+              if (analyzeMessage) send(analyzeMessage);
+            }}
+          />
           <div className="sb-divider" />
           <MarketSnapshot />
         </aside>

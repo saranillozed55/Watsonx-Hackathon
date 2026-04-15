@@ -5,6 +5,7 @@ import uuid
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional, List
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -51,17 +52,25 @@ def get_iam_token():
     return token_cache["token"]
 
 
+# ── Models ────────────────────────────────────────────────────────────────────
+
 class UserProfile(BaseModel):
-    risk:      str | None = None
-    goal:      str | None = None
-    horizon:   str | None = None
-    portfolio: str | None = None
+    risk:      Optional[str] = None
+    goal:      Optional[str] = None
+    horizon:   Optional[str] = None
+    portfolio: Optional[str] = None
+
+
+class Holding(BaseModel):
+    ticker: str
+    value:  float
 
 
 class ChatRequest(BaseModel):
     session_id: str
     message:    str
-    profile:    UserProfile | None = None
+    profile:    Optional[UserProfile] = None
+    holdings:   Optional[List[Holding]] = None
 
 
 class ChatResponse(BaseModel):
@@ -70,17 +79,38 @@ class ChatResponse(BaseModel):
     thread_id:  str
 
 
+# ── Context builder ───────────────────────────────────────────────────────────
+
 def build_message(req: ChatRequest) -> str:
+    lines = []
+
+    # 1. User profile
     if req.profile and any([req.profile.risk, req.profile.goal, req.profile.horizon]):
         parts = []
         if req.profile.risk:      parts.append(f"risk tolerance: {req.profile.risk}")
         if req.profile.goal:      parts.append(f"investment goal: {req.profile.goal}")
         if req.profile.horizon:   parts.append(f"time horizon: {req.profile.horizon}")
-        if req.profile.portfolio: parts.append(f"portfolio size: {req.profile.portfolio}")
-        context = "User profile — " + ", ".join(parts) + "."
-        return f"{context}\n\n{req.message}"
+        if req.profile.portfolio: parts.append(f"stated portfolio size: {req.profile.portfolio}")
+        lines.append("User profile — " + ", ".join(parts) + ".")
+
+    # 2. Portfolio holdings
+    if req.holdings:
+        total = sum(h.value for h in req.holdings)
+        holding_strs = []
+        for h in req.holdings:
+            pct = round(h.value / total * 100) if total else 0
+            holding_strs.append(f"{h.ticker} (${h.value:,.0f}, {pct}%)")
+        lines.append(
+            f"Current portfolio (total ${total:,.0f}): " +
+            ", ".join(holding_strs) + "."
+        )
+
+    if lines:
+        return "\n".join(lines) + "\n\n" + req.message
     return req.message
 
+
+# ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.get("/")
 def root():
