@@ -25,6 +25,7 @@ app.add_middleware(
 token_cache = {"token": None, "expires_at": 0}
 thread_store = {}
 
+
 def get_iam_token():
     if time.time() < token_cache["expires_at"] - 60:
         return token_cache["token"]
@@ -49,23 +50,48 @@ def get_iam_token():
     token_cache["expires_at"] = time.time() + data["expires_in"]
     return token_cache["token"]
 
+
+class UserProfile(BaseModel):
+    risk:      str | None = None
+    goal:      str | None = None
+    horizon:   str | None = None
+    portfolio: str | None = None
+
+
 class ChatRequest(BaseModel):
     session_id: str
-    message: str
+    message:    str
+    profile:    UserProfile | None = None
+
 
 class ChatResponse(BaseModel):
     session_id: str
-    reply: str
-    thread_id: str
+    reply:      str
+    thread_id:  str
+
+
+def build_message(req: ChatRequest) -> str:
+    if req.profile and any([req.profile.risk, req.profile.goal, req.profile.horizon]):
+        parts = []
+        if req.profile.risk:      parts.append(f"risk tolerance: {req.profile.risk}")
+        if req.profile.goal:      parts.append(f"investment goal: {req.profile.goal}")
+        if req.profile.horizon:   parts.append(f"time horizon: {req.profile.horizon}")
+        if req.profile.portfolio: parts.append(f"portfolio size: {req.profile.portfolio}")
+        context = "User profile — " + ", ".join(parts) + "."
+        return f"{context}\n\n{req.message}"
+    return req.message
+
 
 @app.get("/")
 def root():
     return {"status": "ok"}
 
+
 @app.post("/new-session")
 def new_session():
     session_id = str(uuid.uuid4())
     return {"session_id": session_id}
+
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
@@ -73,7 +99,7 @@ def chat(req: ChatRequest):
     thread_id = thread_store.get(req.session_id)
 
     body = {
-        "message": {"role": "user", "content": req.message},
+        "message": {"role": "user", "content": build_message(req)},
         "agent_id": AGENT_ID
     }
 
@@ -81,7 +107,7 @@ def chat(req: ChatRequest):
         body["thread_id"] = thread_id
 
     url = f"{ORCHESTRATE_INSTANCE_URL}/v1/orchestrate/runs?stream=false"
-    
+
     print(f"URL: {url}")
     print(f"AGENT_ID: {AGENT_ID}")
     print(f"Body: {body}")

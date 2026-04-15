@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import "../styles/FinanceAI.css";
+import OnboardingModal from "../components/OnboardingModal";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API INTEGRATION — replace each function with your real calls
@@ -511,8 +512,12 @@ export default function FinanceAI() {
   const [phVisible,   setPhVisible]   = useState(true);
   const [dropActive,  setDropActive]  = useState(false);
   const [attachment,  setAttachment]  = useState(null);
-  const [isRecording, setIsRecording] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);  
   const [sessionId, setSessionId] = useState(() => localStorage.getItem("sessionId"));
+  const [userProfile, setUserProfile] = useState(() => {
+    const stored = localStorage.getItem("userProfile");
+    return stored ? JSON.parse(stored) : null;
+  });
 
   const msgCounter     = useRef(0);
   const dragCounter    = useRef(0);
@@ -643,8 +648,19 @@ export default function FinanceAI() {
       localStorage.setItem("sessionId", currentSessionId);
     }
 
-    const data = await sendToBackend(currentSessionId, text?.trim() || "");
+    // Prepend profile context to every outgoing message
+    const profileContext = userProfile
+      ? `[User profile — risk: ${userProfile.risk}, goal: ${userProfile.goal}, ` +
+        `horizon: ${userProfile.horizon}` +
+        (userProfile.portfolio ? `, portfolio size: ${userProfile.portfolio}` : "") +
+        `]\n\n`
+      : "";
 
+    const data = await sendToBackend(
+      currentSessionId,
+      profileContext + (text?.trim() || "")
+    );
+    
     setTyping(false);
 
     const rid = ++msgCounter.current;
@@ -679,6 +695,8 @@ export default function FinanceAI() {
 
   function resetChat() {
   localStorage.removeItem("sessionId");
+  localStorage.removeItem("userProfile");
+  setUserProfile(null);
   setSessionId(null);
   setChatStarted(false);
   setMessages([]);
@@ -701,6 +719,13 @@ export default function FinanceAI() {
 
   return (
     <div className="finance-app" onDragEnter={onDragEnter} onDragLeave={onDragLeave} onDragOver={onDragOver} onDrop={onDrop}>
+
+      {/* Onboarding render */}
+      {!userProfile && (
+        <OnboardingModal
+          onComplete={(profile) => setUserProfile(profile)}
+        />
+      )}
 
       {/* Drop overlay */}
       <div className={`drop-overlay${dropActive ? " active" : ""}`} onClick={() => { setDropActive(false); dragCounter.current = 0; }}>
