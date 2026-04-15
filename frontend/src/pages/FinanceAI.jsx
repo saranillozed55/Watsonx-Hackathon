@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import "../styles/FinanceAI.css";
 import OnboardingModal from "../components/OnboardingModal";
 import PortfolioPanel from "../components/PortfolioPanel";
+import { marked } from "marked"; // Chatbot response styling
 
 let _marketDataCache = null;
 let _marketDataFetchedAt = 0;
@@ -389,9 +390,10 @@ function Message({ msg }) {
             </div>
           ) : (
             <>
-              <div className="msg-bubble">
-                {msg.paragraphs.map((p, i) => <p key={i} dangerouslySetInnerHTML={{ __html: p }} />)}
-              </div>
+              <div
+                className="msg-bubble msg-markdown"
+                dangerouslySetInnerHTML={{ __html: marked.parse(msg.paragraphs.join("\n\n")) }}
+              />
               {msg.stock && <StockCard stock={msg.stock} msgId={msg.id} />}
               {msg.card  && <InfoCard card={msg.card} />}
             </>
