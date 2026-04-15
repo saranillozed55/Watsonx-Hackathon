@@ -57,39 +57,37 @@ async function fetchMarketSnapshot() {
  *   } | null
  * }
  */
-async function sendToBackend(message, fileContent, imageDataUrl, fileName) {
-  // const res = await fetch('/api/chat', {
-  //   method: 'POST',
-  //   headers: { 'Content-Type': 'application/json' },
-  //   body: JSON.stringify({
-  //     message,
-  //     file_content: fileContent,
-  //     image: imageDataUrl,
-  //     file_name: fileName,
-  //   }),
-  // });
-  // return res.json();
+async function sendToBackend(sessionId, message) {
+  const res = await fetch("http://localhost:8000/chat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      session_id: sessionId,
+      message,
+    }),
+  });
 
-  // Placeholder while backend isn't connected:
-  return {
-    reply: "Connect your backend in <strong>sendToBackend()</strong> inside FinanceAI.jsx to get real responses. The UI is fully wired up and ready.",
-    stock: null,
-    card: null,
-  };
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(errText || `Backend error: ${res.status}`);
+  }
+
+  return await res.json();
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTS
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SIDEBAR_TOPICS = [
-  { icon: "📊", label: "Portfolio Strategy",  key: "portfolio" },
-  { icon: "📈", label: "Stock Analysis",       key: "stocks"    },
-  { icon: "🧩", label: "ETFs & Index Funds",   key: "etf"       },
-  { icon: "🔗", label: "Crypto Assets",        key: "crypto"    },
-  { icon: "🏦", label: "Bonds & Fixed Income", key: "bonds"     },
-  { icon: "🛡",  label: "Risk Management",     key: "risk"      },
-  { icon: "📋", label: "Tax & Retirement",     key: "tax"       },
+  { label: "Portfolio Strategy",  key: "portfolio" },
+  { label: "Stock Analysis",       key: "stocks"    },
+  { label: "ETFs & Index Funds",   key: "etf"       },
+  { label: "Crypto Assets",        key: "crypto"    },
+  { label: "Bonds & Fixed Income", key: "bonds"     },
+  { label: "Risk Management",     key: "risk"      },
+  { label: "Tax & Retirement",     key: "tax"       },
 ];
 
 const TOPIC_QUERIES = {
@@ -399,196 +397,12 @@ function Message({ msg }) {
             <span className="msg-name">{isUser ? "you" : "Smiley"}</span>
             <span className="msg-time">{msg.time}</span>
           </div>
-<<<<<<< HEAD
           {isUser ? (
             <div className="user-bubble-wrap">
               <div className="msg-bubble">
                 {msg.imageDataUrl && <img className="msg-img" src={msg.imageDataUrl} alt="uploaded" />}
                 {msg.filePreview  && <pre className="file-content-preview">{msg.filePreview}</pre>}
                 {msg.paragraphs.map((p, i) => <p key={i} dangerouslySetInnerHTML={{ __html: p }} />)}
-=======
-          <div className="msg-bubble">
-            {msg.paragraphs.map((p, i) => (
-              <p key={i} dangerouslySetInnerHTML={{ __html: renderText(p) }} />
-            ))}
-          </div>
-          {msg.card && <InfoCard card={msg.card} />}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TypingIndicator() {
-  return (
-    <div className="msg-wrap typing-wrap">
-      <div className="msg-row">
-        <div className="msg-avatar ai">AI</div>
-        <div className="msg-content">
-          <div className="msg-meta"><span className="msg-name">financeai</span></div>
-          <div className="typing-dots">
-            <div className="typing-dot" />
-            <div className="typing-dot" />
-            <div className="typing-dot" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function FinanceAI() {
-  const [messages, setMessages] = useState([]);
-  const [linkInput, setLinkInput] = useState("");
-  const [chatInput, setChatInput] = useState("");
-  const [typing, setTyping] = useState(false);
-  const [chatStarted, setChatStarted] = useState(false);
-  const [sessionId, setSessionId] = useState(() => localStorage.getItem("sessionId"));
-  const [placeholderIdx, setPlaceholderIdx] = useState(0);
-  const messagesEndRef = useRef(null);
-  const chatTextareaRef = useRef(null);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, typing]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPlaceholderIdx(i => (i + 1) % PLACEHOLDERS.length);
-    }, 2500);
-    return () => clearInterval(interval);
-  }, []);
-
-  async function startChat(text) {
-    if (!text.trim() || typing) return;
-    const userMsg = { id: Date.now(), role: "user", time: getTime(), paragraphs: [text], card: null };
-    if (!chatStarted) {
-      setChatStarted(true);
-      setMessages([{ ...WELCOME_MSG, time: getTime() }, userMsg]);
-    } else {
-      setMessages(prev => [...prev, userMsg]);
-    }
-    setLinkInput("");
-    setChatInput("");
-    if (chatTextareaRef.current) chatTextareaRef.current.style.height = "auto";
-    setTyping(true);
-
-    try {
-      // Step 1 — get a session ID if we don't have one yet
-      let currentSessionId = sessionId;
-      if (!currentSessionId) {
-        const sessionRes = await fetch("http://localhost:8000/new-session", {
-          method: "POST"
-        });
-        const sessionData = await sessionRes.json();
-        currentSessionId = sessionData.session_id;
-        setSessionId(currentSessionId);
-        localStorage.setItem("sessionId", currentSessionId);
-      }
-
-      // Step 2 — send message to real backend
-      const chatRes = await fetch("http://localhost:8000/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session_id: currentSessionId,
-          message: text
-        })
-      });
-      const chatData = await chatRes.json();
-
-      setTyping(false);
-      setMessages(prev => [...prev, {
-        id: Date.now() + 1,
-        role: "ai",
-        time: getTime(),
-        paragraphs: [chatData.reply],
-        card: null
-      }]);
-
-    } catch (err) {
-      setTyping(false);
-      setMessages(prev => [...prev, {
-        id: Date.now() + 1,
-        role: "ai",
-        time: getTime(),
-        paragraphs: ["Sorry, I couldn't connect to the backend. Make sure it's running on port 8000."],
-        card: null
-      }]);
-    }
-  }
-
-  function autoResize(e) {
-    e.target.style.height = "auto";
-    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
-  }
-
-  function resetChat() {
-    localStorage.removeItem("sessionId");  // add this line
-    setSessionId(null);
-    setChatStarted(false);
-    setMessages([]);
-    setTyping(false);
-    setLinkInput("");
-    setChatInput("");
-}
-
-  return (
-    <div className="app">
-      <aside className="sidebar">
-        <div className="sidebar-top">
-          <button className="sidebar-expand">{">>"}</button>
-          {SIDEBAR_TOP.map(item => (
-            <button key={item.label} className={`sidebar-btn${item.active ? " active" : ""}`}>
-              {item.badge && <span className="badge">{item.badge}</span>}
-              <span className="sb-icon">{item.icon}</span>
-              <span className="sb-label">{item.label}</span>
-            </button>
-          ))}
-        </div>
-        <div className="sidebar-bottom">
-          <div className="sidebar-divider" />
-          {SIDEBAR_BOTTOM.map(item => (
-            <button key={item.label} className="sidebar-btn">
-              <span className="sb-icon">{item.icon}</span>
-              <span className="sb-label">{item.label}</span>
-            </button>
-          ))}
-        </div>
-      </aside>
-
-      <div className="main">
-        <div className="topbar">
-          <div style={{ width: 32 }} />
-          <div className="topbar-center">
-            <span className="plus">+</span>
-            <span>supported services</span>
-          </div>
-          <button className="topbar-right" onClick={resetChat} title="Reset">↓</button>
-        </div>
-
-        <div className="chat-view">
-          {!chatStarted ? (
-            <div className="home-state">
-              <Mascot />
-              <div className="home-input-block">
-                <div className="link-input-wrap">
-                  <span className="link-icon">🔗</span>
-                  <input
-                    className="link-input"
-                    type="text"
-                    placeholder={PLACEHOLDERS[placeholderIdx]}
-                    value={linkInput}
-                    onChange={e => setLinkInput(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && startChat(linkInput)}
-                  />
-                </div>
-                <div className="suggestions" style={{ padding: 0, marginTop: 8 }}>
-                  {SUGGESTIONS.map(s => (
-                    <button key={s} className="sugg-chip" onClick={() => startChat(s)}>{s}</button>
-                  ))}
-                </div>
->>>>>>> 1c2dda821415e69e8ca964874a06cf7d5635959e
               </div>
             </div>
           ) : (
@@ -698,6 +512,7 @@ export default function FinanceAI() {
   const [dropActive,  setDropActive]  = useState(false);
   const [attachment,  setAttachment]  = useState(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [sessionId, setSessionId] = useState(() => localStorage.getItem("sessionId"));
 
   const msgCounter     = useRef(0);
   const dragCounter    = useRef(0);
@@ -782,59 +597,97 @@ export default function FinanceAI() {
   }
 
   async function send(text) {
-    const hasText = text?.trim();
-    const hasFile = !!attachment;
-    if (!hasText && !hasFile) return;
-    if (typing) return;
-    if (!chatStarted) kickoffChat();
+  const hasText = text?.trim();
+  const hasFile = !!attachment;
 
-    const att = attachment;
-    const id  = ++msgCounter.current;
-    const userMsg = {
-      id, role: "user", time: getTime(),
-      paragraphs: hasText ? [text.trim()] : att ? [`Attached: ${att.name}`] : [],
-      imageDataUrl: att?.type === "image" ? att.dataUrl  : null,
-      filePreview:  att?.type === "text"  ? att.content.slice(0, 400).replace(/</g, "&lt;") : null,
-      card: null, stock: null,
-    };
+  if (!hasText && !hasFile) return;
+  if (typing) return;
+  if (!chatStarted) kickoffChat();
 
-    setMessages(prev => [...prev, userMsg]);
-    setChatInput(""); setHomeInput("");
-    if (chatTaRef.current) chatTaRef.current.style.height = "auto";
-    setAttachment(null);
-    setTyping(true);
+  const att = attachment;
+  const id = ++msgCounter.current;
 
-    try {
-      const data = await sendToBackend(
-        text?.trim() || "",
-        att?.type === "text"  ? att.content  : null,
-        att?.type === "image" ? att.dataUrl  : null,
-        att?.name || null
-      );
-      setTyping(false);
-      const rid = ++msgCounter.current;
-      setMessages(prev => [...prev, {
-        id: rid, role: "ai", time: getTime(),
-        paragraphs: [data.reply || ""],
-        stock: data.stock || null,
-        card:  data.card  || null,
-      }]);
-    } catch {
-      setTyping(false);
-      const rid = ++msgCounter.current;
-      setMessages(prev => [...prev, {
-        id: rid, role: "ai", time: getTime(),
-        paragraphs: ["Sorry, I couldn't reach the backend. Check your connection and try again."],
-        card: null, stock: null,
-      }]);
+  const userMsg = {
+    id,
+    role: "user",
+    time: getTime(),
+    paragraphs: hasText ? [text.trim()] : att ? [`Attached: ${att.name}`] : [],
+    imageDataUrl: att?.type === "image" ? att.dataUrl : null,
+    filePreview: att?.type === "text" ? att.content.slice(0, 400).replace(/</g, "&lt;") : null,
+    card: null,
+    stock: null,
+  };
+
+  setMessages(prev => [...prev, userMsg]);
+  setChatInput("");
+  setHomeInput("");
+  if (chatTaRef.current) chatTaRef.current.style.height = "auto";
+  setAttachment(null);
+  setTyping(true);
+
+  try {
+    let currentSessionId = sessionId;
+
+    if (!currentSessionId) {
+      const sessionRes = await fetch("http://localhost:8000/new-session", {
+        method: "POST",
+      });
+
+      if (!sessionRes.ok) {
+        throw new Error("Failed to create session");
+      }
+
+      const sessionData = await sessionRes.json();
+      currentSessionId = sessionData.session_id;
+      setSessionId(currentSessionId);
+      localStorage.setItem("sessionId", currentSessionId);
     }
+
+    const data = await sendToBackend(currentSessionId, text?.trim() || "");
+
+    setTyping(false);
+
+    const rid = ++msgCounter.current;
+    setMessages(prev => [
+      ...prev,
+      {
+        id: rid,
+        role: "ai",
+        time: getTime(),
+        paragraphs: [data.reply || ""],
+        stock: null,
+        card: null,
+      },
+    ]);
+  } catch (err) {
+    setTyping(false);
+
+    const rid = ++msgCounter.current;
+    setMessages(prev => [
+      ...prev,
+      {
+        id: rid,
+        role: "ai",
+        time: getTime(),
+        paragraphs: ["Sorry, I couldn't reach the backend. Make sure it is running on port 8000."],
+        card: null,
+        stock: null,
+      },
+    ]);
   }
+}
 
   function resetChat() {
-    setChatStarted(false); setMessages([]); setTyping(false);
-    setChatInput(""); setHomeInput(""); setAttachment(null);
-    Object.keys(chartDataCache).forEach(k => delete chartDataCache[k]);
-  }
+  localStorage.removeItem("sessionId");
+  setSessionId(null);
+  setChatStarted(false);
+  setMessages([]);
+  setTyping(false);
+  setChatInput("");
+  setHomeInput("");
+  setAttachment(null);
+  Object.keys(chartDataCache).forEach(k => delete chartDataCache[k]);
+}
 
   // ── Drag & Drop ──────────────────────────────────────────────────────────
   function onDragEnter(e) { e.preventDefault(); dragCounter.current++; setDropActive(true); }
