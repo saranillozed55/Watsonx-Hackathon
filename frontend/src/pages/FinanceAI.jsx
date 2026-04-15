@@ -3,62 +3,40 @@ import "../styles/FinanceAI.css";
 import OnboardingModal from "../components/OnboardingModal";
 import PortfolioPanel from "../components/PortfolioPanel";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// API INTEGRATION — replace each function with your real calls
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Ticker bar data. Called on mount.
- * Return shape:
- * {
- *   spx:  { value: "5,621.07", up: true },
- *   ndx:  { value: "19,432.12", up: true },
- *   btc:  { value: "87,204.50", up: false },
- *   gold: { value: "3,082.40",  up: true },
- *   marketOpen: true
- * }
- */
+let _marketDataCache = null;
+let _marketDataFetchedAt = 0;
+ 
+async function fetchMarketData() {
+  const now = Date.now();
+  // 65-second client-side cache (backend caches 60s, we add 5s buffer)
+  if (_marketDataCache && now - _marketDataFetchedAt < 65_000) {
+    return _marketDataCache;
+  }
+  try {
+    const res = await fetch("http://localhost:8000/api/market-data");
+    if (!res.ok) throw new Error(`Market data error: ${res.status}`);
+    const data = await res.json();
+    _marketDataCache = data;
+    _marketDataFetchedAt = now;
+    return data;
+  } catch (err) {
+    console.warn("Market data fetch failed:", err);
+    return null;
+  }
+}
+ 
 async function fetchTickerData() {
-  // const res = await fetch('/api/ticker');
-  // return res.json();
-  return null; // null = shows "—" placeholders
+  const data = await fetchMarketData();
+  if (!data) return null;
+  return data.ticker;   // { spx, ndx, btc, gold, marketOpen }
 }
-
-/**
- * Sidebar market snapshot. Called on mount.
- * Return shape:
- * [
- *   { name: "S&P 500", value: "5,621", change: "+0.82%", up: true },
- *   { name: "NASDAQ",  value: "19,432", change: "+1.14%", up: true },
- *   { name: "DOW",     value: "42,307", change: "-0.23%", up: false },
- *   { name: "VIX",     value: "18.42",  change: "-4.1%",  up: false },
- * ]
- */
+ 
 async function fetchMarketSnapshot() {
-  // const res = await fetch('/api/market-snapshot');
-  // return res.json();
-  return null;
+  const data = await fetchMarketData();
+  if (!data) return null;
+  return data.snapshot; // [ { name, value, change, up }, ... ]
 }
 
-/**
- * Main chat endpoint — your backend / WatsonX agent.
- * Return shape:
- * {
- *   reply: "Here is the analysis...",
- *   stock: {                         // optional — triggers a stock card
- *     name, ticker, price, chg, chgPct,
- *     ahPrice, ahChg, ahChgPct,
- *     open, dayLow, dayHigh, vol,
- *     yearLow, yearHigh, mktCap, eps, pe,
- *     chartData:   { "1D": [247.1, 246.8, ...], "5D": [...], ... },
- *     chartLabels: { "1D": ["9:30 AM", ...],    "5D": [...], ... }
- *   } | null,
- *   card: {                          // optional — triggers an info card
- *     title: "...",
- *     items: [["Key", "Value"], ...]
- *   } | null
- * }
- */
 async function sendToBackend(sessionId, message) {
   const storedProfile  = localStorage.getItem("userProfile");
   const storedHoldings = localStorage.getItem("portfolio");
@@ -433,6 +411,10 @@ function Ticker() {
 
   useEffect(() => {
     fetchTickerData().then(d => { if (d) setData(d); });
+    const id = setInterval(() => {
+      fetchTickerData().then(d => { if (d) setData(d); });
+    }, 60_000);
+    return () => clearInterval(id);
   }, []);
 
   const Item = ({ label, item }) => (
@@ -475,6 +457,10 @@ function MarketSnapshot() {
 
   useEffect(() => {
     fetchMarketSnapshot().then(d => { if (d) setRows(d); });
+    const id = setInterval(() => {
+      fetchMarketSnapshot().then(d => { if (d) setRows(d); });
+    }, 60_000);
+    return () => clearInterval(id);
   }, []);
 
   return (
@@ -691,10 +677,8 @@ export default function FinanceAI() {
 
   function resetChat() {
   localStorage.removeItem("sessionId");
-  localStorage.removeItem("userProfile");
   localStorage.removeItem("portfolio");
   setHoldings([]);
-  setUserProfile(null);
   setSessionId(null);
   setChatStarted(false);
   setMessages([]);
