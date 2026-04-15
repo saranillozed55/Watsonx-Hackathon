@@ -28,16 +28,18 @@ thread_store = {}
 def get_iam_token():
     if time.time() < token_cache["expires_at"] - 60:
         return token_cache["token"]
-
-    r = requests.post(
-        "https://iam.cloud.ibm.com/identity/token",
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        data={
-            "grant_type": "urn:ibm:params:oauth:grant-type:apikey",
-            "apikey": API_KEY
-        },
-        timeout=30
-    )
+    try:
+        r = requests.post(
+            "https://iam.cloud.ibm.com/identity/token",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            data={
+                "grant_type": "urn:ibm:params:oauth:grant-type:apikey",
+                "apikey": API_KEY
+            },
+            timeout=30
+        )
+    except requests.exceptions.ConnectionError as e:
+        raise HTTPException(status_code=503, detail=f"Cannot reach IBM IAM — check network/VPN: {str(e)}")
 
     if r.status_code != 200:
         raise HTTPException(status_code=r.status_code, detail=f"IAM token error: {r.text}")
@@ -79,6 +81,10 @@ def chat(req: ChatRequest):
         body["thread_id"] = thread_id
 
     url = f"{ORCHESTRATE_INSTANCE_URL}/v1/orchestrate/runs?stream=false"
+    
+    print(f"URL: {url}")
+    print(f"AGENT_ID: {AGENT_ID}")
+    print(f"Body: {body}")
 
     try:
         response = requests.post(
@@ -92,7 +98,11 @@ def chat(req: ChatRequest):
             timeout=60
         )
     except requests.exceptions.RequestException as e:
+        print(f"Connection error: {e}")
         raise HTTPException(status_code=500, detail=f"Connection error: {str(e)}")
+
+    print(f"Status: {response.status_code}")
+    print(f"Response: {response.text}")
 
     if response.status_code != 200:
         raise HTTPException(status_code=response.status_code, detail=response.text)
