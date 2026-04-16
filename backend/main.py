@@ -12,8 +12,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_KEY                  = os.getenv("WATSONX_API_KEY")
-AGENT_ID                 = os.getenv("AGENT_ID")
+API_KEY = os.getenv("WATSONX_API_KEY")
+AGENT_ID = os.getenv("AGENT_ID")
 ORCHESTRATE_INSTANCE_URL = os.getenv("ORCHESTRATE_INSTANCE_URL").rstrip("/")
 FINNHUB_API_KEY          = os.getenv("FINNHUB_API_KEY")
 
@@ -50,34 +50,24 @@ All market data is sourced from Finnhub (finnhub.io) in real-time.
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173", ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-token_cache  = {"token": None, "expires_at": 0}
-thread_store = {}
-market_cache = {"data": None, "fetched_at": 0}
-
-
-# ── IBM IAM token ─────────────────────────────────────────────────────────────
+# --- Token cache ---
+token_cache = {"token": None, "expires_at": 0}
 
 def get_iam_token():
     if time.time() < token_cache["expires_at"] - 60:
         return token_cache["token"]
-    try:
-        r = requests.post(
-            "https://iam.cloud.ibm.com/identity/token",
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            data={"grant_type": "urn:ibm:params:oauth:grant-type:apikey", "apikey": API_KEY},
-            timeout=30
-        )
-    except requests.exceptions.ConnectionError as e:
-        raise HTTPException(status_code=503, detail=f"Cannot reach IBM IAM: {str(e)}")
-    if r.status_code != 200:
-        raise HTTPException(status_code=r.status_code, detail=f"IAM token error: {r.text}")
+    r = requests.post(
+        "https://iam.cloud.ibm.com/identity/token",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        data={"grant_type": "urn:ibm:params:oauth:grant-type:apikey", "apikey": API_KEY}
+    )
     data = r.json()
-    token_cache["token"]      = data["access_token"]
+    token_cache["token"] = data["access_token"]
     token_cache["expires_at"] = time.time() + data["expires_in"]
     return token_cache["token"]
 
@@ -555,7 +545,7 @@ multiple messages to maintain conversation memory within the same thread.
     tags=["Chat"],
 )
 def chat(req: ChatRequest):
-    token     = get_iam_token()
+    token = get_iam_token()
     thread_id = thread_store.get(req.session_id)
 
     body = {
@@ -585,42 +575,9 @@ def chat(req: ChatRequest):
     if response.status_code != 200:
         raise HTTPException(status_code=response.status_code, detail=response.text)
 
-    data          = response.json()
+    data = response.json()
     new_thread_id = data.get("thread_id")
-    run_id        = data.get("run_id")
-    if not run_id:
-        raise HTTPException(status_code=500, detail=f"No run_id returned: {data}")
-
     thread_store[req.session_id] = new_thread_id
-    poll_url = f"{ORCHESTRATE_INSTANCE_URL}/v1/orchestrate/runs/{run_id}"
+    reply = data["choices"][0]["message"]["content"]
 
-    for i in range(60):
-        time.sleep(2)
-        try:
-            poll_response = requests.get(
-                poll_url,
-                headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
-                timeout=30
-            )
-        except requests.exceptions.RequestException as e:
-            raise HTTPException(status_code=500, detail=f"Polling error: {str(e)}")
-
-        if poll_response.status_code != 200:
-            raise HTTPException(status_code=poll_response.status_code, detail=poll_response.text)
-
-        poll_data = poll_response.json()
-        status    = poll_data.get("status")
-        print(f"Poll {i+1}: status = {status}")
-
-        if status == "completed":
-            try:
-                reply = poll_data["result"]["data"]["message"]["content"][0].get("text", "No response")
-            except (KeyError, IndexError, TypeError):
-                reply = "No response"
-            return ChatResponse(session_id=req.session_id, reply=reply, thread_id=new_thread_id)
-
-        elif status == "failed":
-            print("Run failed:", poll_data)
-            raise HTTPException(status_code=500, detail="Agent run failed")
-
-    raise HTTPException(status_code=504, detail="Agent timed out")
+    return ChatResponse(session_id=req.session_id, reply=reply, thread_id=new_thread_id)
