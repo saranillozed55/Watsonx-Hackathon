@@ -1,0 +1,872 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Smiley Investment Advisory API",
+    "description": "\nBackend API for the Smiley Investment Advisory platform.\n\nProvides real-time market data, stock analysis, company news, analyst\nrecommendations, and sector peer data sourced from Finnhub. Also exposes\nthe chat interface that routes messages to IBM WatsonX Orchestrate agents.\n\n## Agent Tool Usage\nWatsonX agents should use these endpoints to:\n- Look up live prices and fundamentals for any stock ticker\n- Retrieve recent news before making recommendations\n- Check analyst consensus before suggesting buy/hold/sell\n- Find sector peers when comparing investment options\n- Access the user's portfolio context via the chat endpoint\n\n## Data Source\nAll market data is sourced from Finnhub (finnhub.io) in real-time.\n",
+    "contact": {
+      "name": "Smiley Investment Advisory"
+    },
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health check",
+        "description": "Returns OK if the API server is running.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/market-data": {
+      "get": {
+        "tags": [
+          "Market Data"
+        ],
+        "summary": "Get live market snapshot",
+        "description": "Returns real-time data for the top ticker bar and sidebar market snapshot.\nCovers S&P 500 (SPY), NASDAQ (QQQ), DOW (DIA), VIX (VIXY), Bitcoin (IBIT),\nand Gold (GLD). Results are cached for 60 seconds.\n\n**When to use:** When the user asks about overall market conditions, whether\nmarkets are up or down today, or needs a general market overview before\ndiscussing specific stocks.",
+        "operationId": "market_data_api_market_data_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stock/{ticker}": {
+      "get": {
+        "tags": [
+          "Stock Data"
+        ],
+        "summary": "Get detailed stock quote and fundamentals",
+        "description": "Returns a comprehensive snapshot for a single stock ticker including current\nprice, intraday change, opening price, previous close, 52-week high/low,\ntrading volume, and a 20-point sparkline for charting.\n\n**When to use:** When the user asks about a specific stock's current price,\nperformance today, or basic fundamental data. Use this before providing any\nstock-specific investment advice so recommendations are grounded in real data.\n\n**Examples:** \"What is NVDA trading at?\", \"How is Apple performing today?\",\n\"Give me a summary of Tesla's current price and range.\"",
+        "operationId": "stock_detail_api_stock__ticker__get",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Stock ticker symbol e.g. NVDA, AAPL, MSFT",
+              "title": "Ticker"
+            },
+            "description": "Stock ticker symbol e.g. NVDA, AAPL, MSFT"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stock/{ticker}/news": {
+      "get": {
+        "tags": [
+          "Stock Data"
+        ],
+        "summary": "Get recent company news",
+        "description": "Returns up to 10 recent news articles about a company from the past 30 days,\nincluding headline, summary, source, publication URL, and timestamp.\n\n**When to use:** When the user asks what is happening with a specific company,\nwants to understand recent price movements, or needs context before making an\ninvestment decision. Always fetch news when discussing why a stock has moved\nsignificantly up or down.\n\n**Examples:** \"What's the latest news on NVDA?\", \"Why did Tesla drop today?\",\n\"What's been happening with Microsoft recently?\"",
+        "operationId": "stock_news_api_stock__ticker__news_get",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Stock ticker symbol e.g. NVDA, AAPL, MSFT",
+              "title": "Ticker"
+            },
+            "description": "Stock ticker symbol e.g. NVDA, AAPL, MSFT"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stock/{ticker}/recommendation": {
+      "get": {
+        "tags": [
+          "Stock Data"
+        ],
+        "summary": "Get analyst buy/hold/sell consensus",
+        "description": "Returns the latest Wall Street analyst consensus for a stock, broken down into\nstrong buy, buy, hold, sell, and strong sell counts for the most recent period.\n\n**When to use:** When the user asks what analysts think about a stock, whether\na stock is a buy or sell, or when providing a formal investment recommendation.\nUse this data to ground your recommendation in real analyst sentiment rather\nthan speculation.\n\n**Examples:** \"Should I buy NVDA?\", \"What do analysts think about Apple?\",\n\"Is Tesla a buy right now?\", \"What's the consensus on Microsoft?\"",
+        "operationId": "stock_recommendation_api_stock__ticker__recommendation_get",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Stock ticker symbol e.g. NVDA, AAPL, MSFT",
+              "title": "Ticker"
+            },
+            "description": "Stock ticker symbol e.g. NVDA, AAPL, MSFT"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stock/{ticker}/peers": {
+      "get": {
+        "tags": [
+          "Stock Data"
+        ],
+        "summary": "Get same-sector peer stocks",
+        "description": "Returns a list of ticker symbols for companies in the same sector and industry\nas the queried stock, as determined by Finnhub's classification.\n\n**When to use:** When the user wants to compare a stock against its competitors,\nasks for alternatives to a stock they own, or when performing sector analysis.\nUse peers to provide diversification suggestions or competitive context.\n\n**Examples:** \"What are NVDA's competitors?\", \"What else should I look at besides\nApple?\", \"Give me alternatives to Tesla in the EV space.\"",
+        "operationId": "stock_peers_api_stock__ticker__peers_get",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Stock ticker symbol e.g. NVDA, AAPL, MSFT",
+              "title": "Ticker"
+            },
+            "description": "Stock ticker symbol e.g. NVDA, AAPL, MSFT"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeersResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/new-session": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Create a new chat session",
+        "description": "Generates a new unique session ID. Call this once when a user starts a\nconversation. Pass the returned session_id with every subsequent /chat request\nto maintain conversation continuity with the WatsonX agent thread.",
+        "operationId": "new_session_new_session_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chat": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Send a message to the WatsonX investment advisory agents",
+        "description": "Routes the user's message to the IBM WatsonX Orchestrate multi-agent system.\nThe orchestrator agent delegates to specialized sub-agents:\n\n- **Market Research Agent** \u2014 looks up data, trends, sector analysis\n- **Risk Compliance Agent** \u2014 evaluates risk relative to user profile\n- **Portfolio Agent** \u2014 analyzes holdings and suggests rebalancing\n- **Recommendation Agent** \u2014 synthesizes a final investment recommendation\n\nThe user's investor profile (risk tolerance, goal, time horizon) and current\nportfolio holdings are automatically prepended to every message so agents have\nfull context without the user needing to repeat themselves.\n\n**session_id** must be obtained from /new-session first. Reuse it across\nmultiple messages to maintain conversation memory within the same thread.",
+        "operationId": "chat_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ChatRequest": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id",
+            "description": "Session UUID from /new-session. Maintains conversation thread with WatsonX agents."
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "The user's message or question"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserProfile"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "User's investor profile. Prepended as context to every agent message."
+          },
+          "holdings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Holding"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdings",
+            "description": "User's current portfolio holdings. Prepended as context so agents can give portfolio-specific advice."
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "message"
+        ],
+        "title": "ChatRequest"
+      },
+      "ChatResponse": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id",
+            "description": "Echo of the session ID"
+          },
+          "reply": {
+            "type": "string",
+            "title": "Reply",
+            "description": "The agent's response text"
+          },
+          "thread_id": {
+            "type": "string",
+            "title": "Thread Id",
+            "description": "WatsonX thread ID for conversation continuity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "reply",
+          "thread_id"
+        ],
+        "title": "ChatResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Holding": {
+        "properties": {
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Stock ticker symbol e.g. 'NVDA'"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value",
+            "description": "Current value of this holding in USD"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticker",
+          "value"
+        ],
+        "title": "Holding"
+      },
+      "MarketDataResponse": {
+        "properties": {
+          "ticker": {
+            "$ref": "#/components/schemas/TickerBar",
+            "description": "Data for the top ticker bar"
+          },
+          "snapshot": {
+            "items": {
+              "$ref": "#/components/schemas/SnapshotRow"
+            },
+            "type": "array",
+            "title": "Snapshot",
+            "description": "Data for the sidebar market snapshot"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticker",
+          "snapshot"
+        ],
+        "title": "MarketDataResponse"
+      },
+      "NewsArticle": {
+        "properties": {
+          "headline": {
+            "type": "string",
+            "title": "Headline",
+            "description": "Article headline"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "description": "Brief article summary"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "Full URL to the article"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "Publisher name e.g. 'Reuters'"
+          },
+          "datetime": {
+            "type": "integer",
+            "title": "Datetime",
+            "description": "Unix timestamp of publication"
+          }
+        },
+        "type": "object",
+        "required": [
+          "headline",
+          "summary",
+          "url",
+          "source",
+          "datetime"
+        ],
+        "title": "NewsArticle"
+      },
+      "NewsResponse": {
+        "properties": {
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Ticker symbol the news relates to"
+          },
+          "articles": {
+            "items": {
+              "$ref": "#/components/schemas/NewsArticle"
+            },
+            "type": "array",
+            "title": "Articles",
+            "description": "Up to 10 recent news articles"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticker",
+          "articles"
+        ],
+        "title": "NewsResponse"
+      },
+      "PeersResponse": {
+        "properties": {
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "The queried ticker symbol"
+          },
+          "peers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Peers",
+            "description": "List of same-sector peer ticker symbols"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticker",
+          "peers"
+        ],
+        "title": "PeersResponse"
+      },
+      "RecommendationData": {
+        "properties": {
+          "period": {
+            "type": "string",
+            "title": "Period",
+            "description": "Analysis period e.g. '2024-01-01'"
+          },
+          "strongBuy": {
+            "type": "integer",
+            "title": "Strongbuy",
+            "description": "Number of strong buy ratings"
+          },
+          "buy": {
+            "type": "integer",
+            "title": "Buy",
+            "description": "Number of buy ratings"
+          },
+          "hold": {
+            "type": "integer",
+            "title": "Hold",
+            "description": "Number of hold ratings"
+          },
+          "sell": {
+            "type": "integer",
+            "title": "Sell",
+            "description": "Number of sell ratings"
+          },
+          "strongSell": {
+            "type": "integer",
+            "title": "Strongsell",
+            "description": "Number of strong sell ratings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "period",
+          "strongBuy",
+          "buy",
+          "hold",
+          "sell",
+          "strongSell"
+        ],
+        "title": "RecommendationData"
+      },
+      "RecommendationResponse": {
+        "properties": {
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Ticker symbol"
+          },
+          "recommendation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecommendationData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Latest analyst consensus data, null if unavailable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticker"
+        ],
+        "title": "RecommendationResponse"
+      },
+      "SessionResponse": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id",
+            "description": "Unique session UUID for maintaining conversation state"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id"
+        ],
+        "title": "SessionResponse"
+      },
+      "SnapshotRow": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Display name e.g. 'S&P 500'"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value",
+            "description": "Whole-number price e.g. '562'"
+          },
+          "change": {
+            "type": "string",
+            "title": "Change",
+            "description": "Formatted change string e.g. '+0.82%'"
+          },
+          "up": {
+            "type": "boolean",
+            "title": "Up",
+            "description": "True if positive change"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "value",
+          "change",
+          "up"
+        ],
+        "title": "SnapshotRow"
+      },
+      "StockDetailResponse": {
+        "properties": {
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Uppercase ticker symbol e.g. 'NVDA'"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price",
+            "description": "Current market price in USD"
+          },
+          "change_pct": {
+            "type": "number",
+            "title": "Change Pct",
+            "description": "Percentage change from previous close"
+          },
+          "open": {
+            "type": "number",
+            "title": "Open",
+            "description": "Opening price for the current session"
+          },
+          "prevClose": {
+            "type": "number",
+            "title": "Prevclose",
+            "description": "Previous session closing price"
+          },
+          "low52": {
+            "type": "number",
+            "title": "Low52",
+            "description": "52-week low price"
+          },
+          "high52": {
+            "type": "number",
+            "title": "High52",
+            "description": "52-week high price"
+          },
+          "volume": {
+            "type": "string",
+            "title": "Volume",
+            "description": "Today's trading volume formatted e.g. '42.1M'"
+          },
+          "sparkline": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Sparkline",
+            "description": "20 intraday price points for chart rendering"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticker",
+          "price",
+          "change_pct",
+          "open",
+          "prevClose",
+          "low52",
+          "high52",
+          "volume",
+          "sparkline"
+        ],
+        "title": "StockDetailResponse"
+      },
+      "TickerBar": {
+        "properties": {
+          "spx": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TickerItem"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "S&P 500 proxy (SPY ETF)"
+          },
+          "ndx": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TickerItem"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "NASDAQ proxy (QQQ ETF)"
+          },
+          "btc": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TickerItem"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bitcoin proxy (IBIT ETF)"
+          },
+          "gold": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TickerItem"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Gold proxy (GLD ETF)"
+          },
+          "marketOpen": {
+            "type": "boolean",
+            "title": "Marketopen",
+            "description": "Whether US markets are currently open"
+          }
+        },
+        "type": "object",
+        "required": [
+          "marketOpen"
+        ],
+        "title": "TickerBar"
+      },
+      "TickerItem": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value",
+            "description": "Formatted price string e.g. '562.14'"
+          },
+          "up": {
+            "type": "boolean",
+            "title": "Up",
+            "description": "True if price is up from previous close"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "up"
+        ],
+        "title": "TickerItem"
+      },
+      "UserProfile": {
+        "properties": {
+          "risk": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk",
+            "description": "Risk tolerance: low, moderate, or high"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal",
+            "description": "Investment goal: growth, income, or preservation"
+          },
+          "horizon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizon",
+            "description": "Time horizon e.g. '10 years'"
+          },
+          "portfolio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio",
+            "description": "Stated total portfolio size e.g. '$100,000'"
+          }
+        },
+        "type": "object",
+        "title": "UserProfile"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://crust-marmalade-recreate.ngrok-free.dev",
+      "description": "Smiley Investment Advisory Backend"
+    }
+  ]
+}
