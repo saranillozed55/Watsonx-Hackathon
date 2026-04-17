@@ -116,6 +116,7 @@ textarea, input { font-family: inherit; }
   border-right: 1px solid var(--border);
   display: flex; flex-direction: column;
   padding: 12px 0; overflow-y: auto; overflow-x: hidden;
+  height: calc(100vh - var(--ticker-h));
 }
 .sidebar::-webkit-scrollbar { width: 2px; }
 .sidebar::-webkit-scrollbar-thumb { background: var(--border-light); }
