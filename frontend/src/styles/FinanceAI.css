@@ -116,7 +116,7 @@ textarea, input { font-family: inherit; }
   border-right: 1px solid var(--border);
   display: flex; flex-direction: column;
   padding: 12px 0; overflow-y: auto; overflow-x: hidden;
-  height: calc(100vh - var(--ticker-h));
+  height: calc(100vh - 36px);
 }
 .sidebar::-webkit-scrollbar { width: 2px; }
 .sidebar::-webkit-scrollbar-thumb { background: var(--border-light); }
@@ -176,6 +176,9 @@ textarea, input { font-family: inherit; }
 .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 
 .topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   height: 44px; flex-shrink: 0;
   display: flex; align-items: center;
   padding: 0 20px; border-bottom: 1px solid var(--border);
@@ -188,6 +191,42 @@ textarea, input { font-family: inherit; }
 }
 .logo-text { font-size: 13px; font-weight: 500; letter-spacing: 0.04em; }
 .logo-sub  { font-size: 8px; color: var(--text-muted); letter-spacing: 0.12em; text-transform: uppercase; display: block; margin-top: 1px; }
+
+.topbar {
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.topbar-tab {
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  background: none;
+  border: none;
+  padding: 6px 16px;
+  cursor: pointer;
+  transition: color 0.15s;
+  border-radius: 8px;
+}
+
+.topbar-tab:hover { color: #c9a84c; }
+
+.topbar-tab.active {
+  background: #c9a84c;
+  color: #0d0d0d;
+  font-weight: 500;
+}
 
 /* ── Chat view ────────────────────────────────────────────── */
 .chat-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
