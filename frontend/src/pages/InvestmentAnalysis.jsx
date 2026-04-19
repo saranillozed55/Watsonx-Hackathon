@@ -210,6 +210,7 @@ function AIAnalysis({ ticker, sector, stockData, recData, profile }) {
   const [text,    setText]    = useState("");
   const [loading, setLoading] = useState(false);
   const [fetched, setFetched] = useState(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!ticker || fetched === ticker) return;
@@ -263,14 +264,28 @@ Be concise, specific, and data-driven. No generic disclaimers.`;
       let sessionId = localStorage.getItem("sessionId");
       if (!sessionId) {
         try {
-          const s  = await fetch(`${API}/new-session`, { method: "POST" });
-          const sd = await s.json();
-          sessionId = sd.session_id;
-          localStorage.setItem("sessionId", sessionId);
-        } catch {
-          setText("Failed to create session.");
-          setLoading(false);
-          return;
+          const r = await fetch(`${API}/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              session_id: sessionId,
+              message:    prompt,
+              profile:    storedProfile  ? JSON.parse(storedProfile)  : null,
+              holdings:   storedHoldings ? JSON.parse(storedHoldings) : null,
+          }),
+        });
+          const d = await r.json();
+          console.log("Analysis response:", d);  // ← add this to debug
+          if (d?.reply) {
+            setText(d.reply);
+            setError(false);
+          } else {
+            setText("");
+            setError(true);
+          }
+        } catch (err) {
+          console.error("Analysis error:", err);
+          setError(true);
         }
       }
 
@@ -310,6 +325,22 @@ Be concise, specific, and data-driven. No generic disclaimers.`;
               style={{ width: `${w}%`, animationDelay: `${i * 0.12}s` }} />
           ))}
           <div className="ia-loading-label">Analyzing {ticker} via WatsonX…</div>
+        </div>
+      ) : error ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", padding: "0.5rem 0" }}>
+          <div className="ia-muted">Analysis failed to load.</div>
+          <button
+            onClick={() => { setFetched(null); setError(false); }}
+            style={{
+              fontSize: "11px", color: "#c9a84c",
+              background: "rgba(201,168,76,0.1)",
+              border: "0.5px solid rgba(201,168,76,0.3)",
+              borderRadius: "6px", padding: "5px 12px",
+              cursor: "pointer", width: "fit-content"
+            }}
+          >
+            Retry →
+          </button>
         </div>
       ) : text ? (
         <div className="ia-md"
