@@ -3,6 +3,7 @@ import "../styles/FinanceAI.css";
 import OnboardingModal from "../components/OnboardingModal";
 import PortfolioPanel from "../components/PortfolioPanel";
 import { marked } from "marked"; // Chatbot response styling
+import InvestmentAnalysis from "./InvestmentAnalysis";
 
 let _marketDataCache = null;
 let _marketDataFetchedAt = 0;
@@ -513,6 +514,7 @@ export default function FinanceAI() {
     const saved = localStorage.getItem("portfolio");
     return saved ? JSON.parse(saved) : [];
   });
+  const [activeTab, setActiveTab] = useState("chat");
 
   const msgCounter     = useRef(0);
   const dragCounter    = useRef(0);
@@ -767,10 +769,26 @@ export default function FinanceAI() {
                 <span className="logo-sub">Investment Advisory</span>
               </div>
             </div>
+            <div className="topbar-tabs">
+              <button
+                className={`topbar-tab${activeTab === "chat" ? " active" : ""}`}
+                onClick={() => setActiveTab("chat")}
+              >
+                Chat
+              </button>
+              <button
+                className={`topbar-tab${activeTab === "analysis" ? " active" : ""}`}
+                onClick={() => setActiveTab("analysis")}
+              >
+                Analysis
+              </button>
+            </div>
           </div>
 
           <div className="chat-view">
-            {!chatStarted ? (
+            {activeTab === "analysis" ? (
+              <InvestmentAnalysis /> 
+              ) : !chatStarted ? (
               /* ── HOME ── */
               <div className="home-state">
                 <div className="greeting-text">{getGreeting()}</div>
