@@ -140,14 +140,13 @@ function HoldingRow({ holding, stockData, selected, onClick }) {
 function RecommendationBar({ rec }) {
   if (!rec) return null;
   const { strongBuy, buy, hold, sell, strongSell, period } = rec;
-  const total = strongBuy + buy + hold + sell + strongSell || 1;
+  const total     = strongBuy + buy + hold + sell + strongSell || 1;
   const buyCount  = strongBuy + buy;
   const sellCount = sell + strongSell;
   const consensus = buyCount > hold && buyCount > sellCount ? "BUY"
                   : hold >= buyCount && hold >= sellCount   ? "HOLD"
                   : "SELL";
   const consColor = { BUY: "#4ade80", HOLD: "#c9a84c", SELL: "#f87171" }[consensus];
-
   const bars = [
     { label: "Strong Buy",  val: strongBuy,  color: "#4ade80" },
     { label: "Buy",         val: buy,        color: "#86efac" },
@@ -155,7 +154,6 @@ function RecommendationBar({ rec }) {
     { label: "Sell",        val: sell,       color: "#f87171" },
     { label: "Strong Sell", val: strongSell, color: "#dc2626" },
   ];
-
   return (
     <div className="ia-rec">
       <div className="ia-rec-header">
@@ -167,8 +165,7 @@ function RecommendationBar({ rec }) {
       </div>
       <div className="ia-rec-bar">
         {bars.map(b => (
-          <div key={b.label}
-            className="ia-rec-seg"
+          <div key={b.label} className="ia-rec-seg"
             style={{ flex: b.val || 0.1, background: b.color }}
             title={`${b.label}: ${b.val}`}
           />
@@ -208,7 +205,7 @@ function StatsStrip({ stockData }) {
   );
 }
 
-// ── AI Analysis ───────────────────────────────────────────────────────────────
+// ── AI Analysis — routed through WatsonX agents ───────────────────────────────
 function AIAnalysis({ ticker, sector, stockData, recData, profile }) {
   const [text,    setText]    = useState("");
   const [loading, setLoading] = useState(false);
@@ -216,7 +213,8 @@ function AIAnalysis({ ticker, sector, stockData, recData, profile }) {
 
   useEffect(() => {
     if (!ticker || fetched === ticker) return;
-    setLoading(true); setText("");
+    setLoading(true);
+    setText("");
 
     const profileStr = profile
       ? `Investor profile: risk tolerance = ${profile.risk}, goal = ${profile.goal}, horizon = ${profile.horizon}.`
@@ -261,22 +259,46 @@ Given the investor profile above, a clear Buy / Hold / Reduce recommendation wit
 
 Be concise, specific, and data-driven. No generic disclaimers.`;
 
-    fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    })
-      .then(r => r.json())
-      .then(d => {
-        setText(d?.content?.[0]?.text || "Analysis unavailable.");
-        setFetched(ticker);
-        setLoading(false);
-      })
-      .catch(() => { setText("Failed to load analysis."); setLoading(false); });
+    async function runAnalysis() {
+      let sessionId = localStorage.getItem("sessionId");
+      if (!sessionId) {
+        try {
+          const s  = await fetch(`${API}/new-session`, { method: "POST" });
+          const sd = await s.json();
+          sessionId = sd.session_id;
+          localStorage.setItem("sessionId", sessionId);
+        } catch {
+          setText("Failed to create session.");
+          setLoading(false);
+          return;
+        }
+      }
+
+      const storedProfile  = localStorage.getItem("userProfile");
+      const storedHoldings = localStorage.getItem("portfolio");
+
+      try {
+        const r = await fetch(`${API}/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId,
+            message:    prompt,
+            profile:    storedProfile  ? JSON.parse(storedProfile)  : null,
+            holdings:   storedHoldings ? JSON.parse(storedHoldings) : null,
+          }),
+        });
+        const d = await r.json();
+        setText(d?.reply || "Analysis unavailable.");
+      } catch {
+        setText("Failed to load analysis.");
+      }
+
+      setFetched(ticker);
+      setLoading(false);
+    }
+
+    runAnalysis();
   }, [ticker]);
 
   return (
@@ -287,7 +309,7 @@ Be concise, specific, and data-driven. No generic disclaimers.`;
             <div key={i} className="ia-loading-bar"
               style={{ width: `${w}%`, animationDelay: `${i * 0.12}s` }} />
           ))}
-          <div className="ia-loading-label">Analyzing {ticker}…</div>
+          <div className="ia-loading-label">Analyzing {ticker} via WatsonX…</div>
         </div>
       ) : text ? (
         <div className="ia-md"
@@ -305,7 +327,8 @@ function NewsPanel({ ticker }) {
 
   useEffect(() => {
     if (!ticker || fetched === ticker) return;
-    setLoading(true); setArticles([]);
+    setLoading(true);
+    setArticles([]);
     fetch(`${API}/api/stock/${ticker}/news`)
       .then(r => r.json())
       .then(d => { setArticles(d.articles || []); setFetched(ticker); setLoading(false); })
@@ -351,7 +374,8 @@ function PeersPanel({ ticker }) {
 
   useEffect(() => {
     if (!ticker || fetched === ticker) return;
-    setLoading(true); setPeers([]);
+    setLoading(true);
+    setPeers([]);
     fetch(`${API}/api/stock/${ticker}/peers`)
       .then(r => r.json())
       .then(d => { setPeers(d.peers || []); setFetched(ticker); setLoading(false); })
@@ -392,7 +416,6 @@ export default function InvestmentAnalysis() {
   const [loading,   setLoading]   = useState(false);
   const [profile,   setProfile]   = useState(null);
 
-  // Load from localStorage
   useEffect(() => {
     const saved = localStorage.getItem("portfolio");
     const prof  = localStorage.getItem("userProfile");
@@ -404,7 +427,6 @@ export default function InvestmentAnalysis() {
     if (prof) setProfile(JSON.parse(prof));
   }, []);
 
-  // Fetch quotes for all holdings
   useEffect(() => {
     if (!holdings.length) return;
     setLoading(true);
@@ -423,25 +445,21 @@ export default function InvestmentAnalysis() {
     });
   }, [holdings]);
 
-  // Fetch analyst recommendation when selected changes
   useEffect(() => {
     if (!selected || recData[selected] !== undefined) return;
     fetch(`${API}/api/stock/${selected}/recommendation`)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
-        setRecData(prev => ({
-          ...prev,
-          [selected]: d?.recommendation || null
-        }));
+        setRecData(prev => ({ ...prev, [selected]: d?.recommendation || null }));
       })
       .catch(() => {});
   }, [selected]);
 
-  const total       = holdings.reduce((s, h) => s + h.value, 0);
-  const selData     = stockData[selected] || null;
-  const selRec      = recData[selected]   || null;
-  const selSector   = selected ? getSector(selected) : null;
-  const selColor    = selSector ? (SECTOR_COLORS[selSector] || "#555") : "#555";
+  const total     = holdings.reduce((s, h) => s + h.value, 0);
+  const selData   = stockData[selected] || null;
+  const selRec    = recData[selected]   || null;
+  const selSector = selected ? getSector(selected) : null;
+  const selColor  = selSector ? (SECTOR_COLORS[selSector] || "#555") : "#555";
 
   if (!holdings.length) {
     return (
@@ -455,8 +473,6 @@ export default function InvestmentAnalysis() {
 
   return (
     <div className="ia-page">
-
-      {/* ── Page header ── */}
       <div className="ia-page-header">
         <div>
           <div className="ia-page-title">Investment Analysis</div>
@@ -475,16 +491,12 @@ export default function InvestmentAnalysis() {
         </div>
       </div>
 
-      {/* ── Allocation bar ── */}
       <div className="ia-card" style={{ marginBottom: "1rem" }}>
         <div className="ia-card-label">Sector Allocation</div>
         <AllocationBar holdings={holdings} />
       </div>
 
-      {/* ── Main grid ── */}
       <div className="ia-grid">
-
-        {/* Left — holdings list */}
         <div className="ia-left">
           <div className="ia-card-label" style={{ marginBottom: "8px" }}>Holdings</div>
           {holdings.map(h => (
@@ -498,11 +510,9 @@ export default function InvestmentAnalysis() {
           ))}
         </div>
 
-        {/* Right — detail panels */}
         <div className="ia-right">
           {selected ? (
             <>
-              {/* Header card */}
               <div className="ia-card ia-detail-header">
                 <div className="ia-detail-title-row">
                   <div>
