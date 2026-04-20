@@ -25,7 +25,7 @@ spec = app.openapi()
 
 spec["servers"] = [
     {
-        "url": "https://crust-marmalade-recreate.ngrok-free.dev",
+        "url": "https://watsonx-hackathon-production.up.railway.app",
         "description": "Smiley Investment Advisory Backend"
     }
 ]
