@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { marked } from "marked";
 import "../styles/InvestmentAnalysis.css";
-
-const API = "http://localhost:8000";
+import API from "../config";
 
 // ── Sector map ────────────────────────────────────────────────────────────────
 const SECTOR_MAP = {
