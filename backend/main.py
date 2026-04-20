@@ -9,13 +9,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from dotenv import load_dotenv
+from datetime import datetime
+import zoneinfo
 
 load_dotenv()
 
-API_KEY                  = os.getenv("WATSONX_API_KEY")
-AGENT_ID                 = os.getenv("AGENT_ID")
+API_KEY = os.getenv("WATSONX_API_KEY")
+AGENT_ID = os.getenv("AGENT_ID")
 ORCHESTRATE_INSTANCE_URL = os.getenv("ORCHESTRATE_INSTANCE_URL").rstrip("/")
-FINNHUB_API_KEY          = os.getenv("FINNHUB_API_KEY")
+FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 
 print(f"FINNHUB_API_KEY loaded: {'YES' if FINNHUB_API_KEY else 'NO — check .env'}")
 
@@ -55,12 +57,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-token_cache  = {"token": None, "expires_at": 0}
+token_cache = {"token": None, "expires_at": 0}
 thread_store = {}
 market_cache = {"data": None, "fetched_at": 0}
 
 
 # ── IBM IAM token ─────────────────────────────────────────────────────────────
+
 
 def get_iam_token():
     if time.time() < token_cache["expires_at"] - 60:
@@ -69,20 +72,26 @@ def get_iam_token():
         r = requests.post(
             "https://iam.cloud.ibm.com/identity/token",
             headers={"Content-Type": "application/x-www-form-urlencoded"},
-            data={"grant_type": "urn:ibm:params:oauth:grant-type:apikey", "apikey": API_KEY},
-            timeout=30
+            data={
+                "grant_type": "urn:ibm:params:oauth:grant-type:apikey",
+                "apikey": API_KEY,
+            },
+            timeout=30,
         )
     except requests.exceptions.ConnectionError as e:
         raise HTTPException(status_code=503, detail=f"Cannot reach IBM IAM: {str(e)}")
     if r.status_code != 200:
-        raise HTTPException(status_code=r.status_code, detail=f"IAM token error: {r.text}")
+        raise HTTPException(
+            status_code=r.status_code, detail=f"IAM token error: {r.text}"
+        )
     data = r.json()
-    token_cache["token"]      = data["access_token"]
+    token_cache["token"] = data["access_token"]
     token_cache["expires_at"] = time.time() + data["expires_in"]
     return token_cache["token"]
 
 
 # ── Finnhub helpers ───────────────────────────────────────────────────────────
+
 
 def fh_get(path: str, params: dict = None):
     if not FINNHUB_API_KEY:
@@ -91,7 +100,9 @@ def fh_get(path: str, params: dict = None):
     p["token"] = FINNHUB_API_KEY
     r = requests.get(f"{FINNHUB_BASE}{path}", params=p, timeout=15)
     if r.status_code != 200:
-        raise HTTPException(status_code=r.status_code, detail=f"Finnhub error ({path}): {r.text}")
+        raise HTTPException(
+            status_code=r.status_code, detail=f"Finnhub error ({path}): {r.text}"
+        )
     return r.json()
 
 
@@ -113,10 +124,10 @@ def fmt_volume(v):
 
 def fetch_quote(ticker: str):
     try:
-        d      = fh_get("/quote", {"symbol": ticker})
-        close  = d.get("c") or 0
+        d = fh_get("/quote", {"symbol": ticker})
+        close = d.get("c") or 0
         prev_c = d.get("pc") or close
-        chg    = _pct(close, prev_c)
+        chg = _pct(close, prev_c)
         print(f"  {ticker}: close={close}, prev={prev_c}, chg={chg}%")
         return {"value": f"{close:,.2f}", "change_pct": chg, "up": chg >= 0}
     except Exception as e:
@@ -134,41 +145,49 @@ def _to_snapshot_row(snap, name):
     if not snap:
         return {"name": name, "value": "—", "change": "—", "up": True}
     return {
-        "name":   name,
-        "value":  snap["value"].split(".")[0],
+        "name": name,
+        "value": snap["value"].split(".")[0],
         "change": f"{'+' if snap['up'] else ''}{snap['change_pct']}%",
-        "up":     snap["up"],
+        "up": snap["up"],
     }
+
+
+def get_market_status() -> str:
+    now = datetime.now(zoneinfo.ZoneInfo("America/Los_Angeles"))
+    if now.weekday() >= 5:
+        return "closed"
+    t = now.hour * 60 + now.minute
+    if 60 <= t < 390:
+        return "pre-market"  # 1:00–6:30 AM PT
+    elif 390 <= t < 780:
+        return "open"  # 6:30 AM–1:00 PM PT
+    elif 780 <= t < 1020:
+        return "after-hours"  # 1:00–5:00 PM PT
+    else:
+        return "closed"
 
 
 def build_market_data():
     print("Fetching market data from Finnhub...")
-    spy  = fetch_quote("SPY")
-    qqq  = fetch_quote("QQQ")
-    dia  = fetch_quote("DIA")
+    spy = fetch_quote("SPY")
+    qqq = fetch_quote("QQQ")
+    dia = fetch_quote("DIA")
     vixy = fetch_quote("VIXY")
     ibit = fetch_quote("IBIT")
-    gld  = fetch_quote("GLD")
-
-    market_open = False
-    try:
-        q = fh_get("/quote", {"symbol": "SPY"})
-        market_open = (time.time() - q.get("t", 0)) < 28_800
-    except Exception:
-        pass
+    gld = fetch_quote("GLD")
 
     return {
         "ticker": {
-            "spx":        _to_ticker_item(spy),
-            "ndx":        _to_ticker_item(qqq),
-            "btc":        _to_ticker_item(ibit),
-            "gold":       _to_ticker_item(gld),
-            "marketOpen": market_open,
+            "spx": _to_ticker_item(spy),
+            "ndx": _to_ticker_item(qqq),
+            "btc": _to_ticker_item(ibit),
+            "gold": _to_ticker_item(gld),
+            "marketStatus": get_market_status(),
         },
         "snapshot": [
-            _to_snapshot_row(spy,  "S&P 500"),
-            _to_snapshot_row(qqq,  "NASDAQ"),
-            _to_snapshot_row(dia,  "DOW"),
+            _to_snapshot_row(spy, "S&P 500"),
+            _to_snapshot_row(qqq, "NASDAQ"),
+            _to_snapshot_row(dia, "DOW"),
             _to_snapshot_row(vixy, "VIX"),
         ],
     }
@@ -179,8 +198,8 @@ def build_sparkline(open_: float, close: float, high: float, low: float, ticker:
     points = []
     for i in range(20):
         t_ratio = i / 19
-        base    = open_ + (close - open_) * t_ratio
-        noise   = (high - low) * 0.15 * math.sin(i * 1.3) * random.uniform(0.5, 1.0)
+        base = open_ + (close - open_) * t_ratio
+        noise = (high - low) * 0.15 * math.sin(i * 1.3) * random.uniform(0.5, 1.0)
         points.append(round(base + noise, 2))
     points[-1] = close
     return points
@@ -188,100 +207,144 @@ def build_sparkline(open_: float, close: float, high: float, low: float, ticker:
 
 # ── Response models (makes the OpenAPI schema clean and readable) ─────────────
 
+
 class TickerItem(BaseModel):
     value: str = Field(description="Formatted price string e.g. '562.14'")
-    up:    bool = Field(description="True if price is up from previous close")
+    up: bool = Field(description="True if price is up from previous close")
+
 
 class SnapshotRow(BaseModel):
-    name:   str  = Field(description="Display name e.g. 'S&P 500'")
-    value:  str  = Field(description="Whole-number price e.g. '562'")
-    change: str  = Field(description="Formatted change string e.g. '+0.82%'")
-    up:     bool = Field(description="True if positive change")
+    name: str = Field(description="Display name e.g. 'S&P 500'")
+    value: str = Field(description="Whole-number price e.g. '562'")
+    change: str = Field(description="Formatted change string e.g. '+0.82%'")
+    up: bool = Field(description="True if positive change")
+
 
 class TickerBar(BaseModel):
-    spx:        Optional[TickerItem] = Field(None, description="S&P 500 proxy (SPY ETF)")
-    ndx:        Optional[TickerItem] = Field(None, description="NASDAQ proxy (QQQ ETF)")
-    btc:        Optional[TickerItem] = Field(None, description="Bitcoin proxy (IBIT ETF)")
-    gold:       Optional[TickerItem] = Field(None, description="Gold proxy (GLD ETF)")
-    marketOpen: bool                 = Field(description="Whether US markets are currently open")
+    spx: Optional[TickerItem] = Field(None, description="S&P 500 proxy (SPY ETF)")
+    ndx: Optional[TickerItem] = Field(None, description="NASDAQ proxy (QQQ ETF)")
+    btc: Optional[TickerItem] = Field(None, description="Bitcoin proxy (IBIT ETF)")
+    gold: Optional[TickerItem] = Field(None, description="Gold proxy (GLD ETF)")
+    marketStatus: str = Field(
+        description="Market status: open, pre-market, after-hours, or closed"
+    )
+
 
 class MarketDataResponse(BaseModel):
-    ticker:   TickerBar        = Field(description="Data for the top ticker bar")
-    snapshot: List[SnapshotRow] = Field(description="Data for the sidebar market snapshot")
+    ticker: TickerBar = Field(description="Data for the top ticker bar")
+    snapshot: List[SnapshotRow] = Field(
+        description="Data for the sidebar market snapshot"
+    )
+
 
 class StockDetailResponse(BaseModel):
-    ticker:     str        = Field(description="Uppercase ticker symbol e.g. 'NVDA'")
-    price:      float      = Field(description="Current market price in USD")
-    change_pct: float      = Field(description="Percentage change from previous close")
-    open:       float      = Field(description="Opening price for the current session")
-    prevClose:  float      = Field(description="Previous session closing price")
-    low52:      float      = Field(description="52-week low price")
-    high52:     float      = Field(description="52-week high price")
-    volume:     str        = Field(description="Today's trading volume formatted e.g. '42.1M'")
-    sparkline:  List[float] = Field(description="20 intraday price points for chart rendering")
+    ticker: str = Field(description="Uppercase ticker symbol e.g. 'NVDA'")
+    price: float = Field(description="Current market price in USD")
+    change_pct: float = Field(description="Percentage change from previous close")
+    open: float = Field(description="Opening price for the current session")
+    prevClose: float = Field(description="Previous session closing price")
+    low52: float = Field(description="52-week low price")
+    high52: float = Field(description="52-week high price")
+    volume: str = Field(description="Today's trading volume formatted e.g. '42.1M'")
+    sparkline: List[float] = Field(
+        description="20 intraday price points for chart rendering"
+    )
+
 
 class NewsArticle(BaseModel):
     headline: str = Field(description="Article headline")
-    summary:  str = Field(description="Brief article summary")
-    url:      str = Field(description="Full URL to the article")
-    source:   str = Field(description="Publisher name e.g. 'Reuters'")
+    summary: str = Field(description="Brief article summary")
+    url: str = Field(description="Full URL to the article")
+    source: str = Field(description="Publisher name e.g. 'Reuters'")
     datetime: int = Field(description="Unix timestamp of publication")
 
+
 class NewsResponse(BaseModel):
-    ticker:   str              = Field(description="Ticker symbol the news relates to")
+    ticker: str = Field(description="Ticker symbol the news relates to")
     articles: List[NewsArticle] = Field(description="Up to 10 recent news articles")
 
+
 class RecommendationData(BaseModel):
-    period:     str = Field(description="Analysis period e.g. '2024-01-01'")
-    strongBuy:  int = Field(description="Number of strong buy ratings")
-    buy:        int = Field(description="Number of buy ratings")
-    hold:       int = Field(description="Number of hold ratings")
-    sell:       int = Field(description="Number of sell ratings")
+    period: str = Field(description="Analysis period e.g. '2024-01-01'")
+    strongBuy: int = Field(description="Number of strong buy ratings")
+    buy: int = Field(description="Number of buy ratings")
+    hold: int = Field(description="Number of hold ratings")
+    sell: int = Field(description="Number of sell ratings")
     strongSell: int = Field(description="Number of strong sell ratings")
 
+
 class RecommendationResponse(BaseModel):
-    ticker:         str                        = Field(description="Ticker symbol")
-    recommendation: Optional[RecommendationData] = Field(None, description="Latest analyst consensus data, null if unavailable")
+    ticker: str = Field(description="Ticker symbol")
+    recommendation: Optional[RecommendationData] = Field(
+        None, description="Latest analyst consensus data, null if unavailable"
+    )
+
 
 class PeersResponse(BaseModel):
-    ticker: str       = Field(description="The queried ticker symbol")
-    peers:  List[str] = Field(description="List of same-sector peer ticker symbols")
+    ticker: str = Field(description="The queried ticker symbol")
+    peers: List[str] = Field(description="List of same-sector peer ticker symbols")
+
 
 class SessionResponse(BaseModel):
-    session_id: str = Field(description="Unique session UUID for maintaining conversation state")
+    session_id: str = Field(
+        description="Unique session UUID for maintaining conversation state"
+    )
+
 
 class UserProfile(BaseModel):
-    risk:      Optional[str] = Field(None, description="Risk tolerance: low, moderate, or high")
-    goal:      Optional[str] = Field(None, description="Investment goal: growth, income, or preservation")
-    horizon:   Optional[str] = Field(None, description="Time horizon e.g. '10 years'")
-    portfolio: Optional[str] = Field(None, description="Stated total portfolio size e.g. '$100,000'")
+    risk: Optional[str] = Field(
+        None, description="Risk tolerance: low, moderate, or high"
+    )
+    goal: Optional[str] = Field(
+        None, description="Investment goal: growth, income, or preservation"
+    )
+    horizon: Optional[str] = Field(None, description="Time horizon e.g. '10 years'")
+    portfolio: Optional[str] = Field(
+        None, description="Stated total portfolio size e.g. '$100,000'"
+    )
+
 
 class Holding(BaseModel):
-    ticker: str   = Field(description="Stock ticker symbol e.g. 'NVDA'")
-    value:  float = Field(description="Current value of this holding in USD")
+    ticker: str = Field(description="Stock ticker symbol e.g. 'NVDA'")
+    value: float = Field(description="Current value of this holding in USD")
+
 
 class ChatRequest(BaseModel):
-    session_id: str                     = Field(description="Session UUID from /new-session. Maintains conversation thread with WatsonX agents.")
-    message:    str                     = Field(description="The user's message or question")
-    profile:    Optional[UserProfile]   = Field(None, description="User's investor profile. Prepended as context to every agent message.")
-    holdings:   Optional[List[Holding]] = Field(None, description="User's current portfolio holdings. Prepended as context so agents can give portfolio-specific advice.")
+    session_id: str = Field(
+        description="Session UUID from /new-session. Maintains conversation thread with WatsonX agents."
+    )
+    message: str = Field(description="The user's message or question")
+    profile: Optional[UserProfile] = Field(
+        None,
+        description="User's investor profile. Prepended as context to every agent message.",
+    )
+    holdings: Optional[List[Holding]] = Field(
+        None,
+        description="User's current portfolio holdings. Prepended as context so agents can give portfolio-specific advice.",
+    )
+
 
 class ChatResponse(BaseModel):
     session_id: str = Field(description="Echo of the session ID")
-    reply:      str = Field(description="The agent's response text")
-    thread_id:  str = Field(description="WatsonX thread ID for conversation continuity")
+    reply: str = Field(description="The agent's response text")
+    thread_id: str = Field(description="WatsonX thread ID for conversation continuity")
 
 
 # ── Context builder ───────────────────────────────────────────────────────────
+
 
 def build_message(req: ChatRequest) -> str:
     lines = []
     if req.profile and any([req.profile.risk, req.profile.goal, req.profile.horizon]):
         parts = []
-        if req.profile.risk:      parts.append(f"risk tolerance: {req.profile.risk}")
-        if req.profile.goal:      parts.append(f"investment goal: {req.profile.goal}")
-        if req.profile.horizon:   parts.append(f"time horizon: {req.profile.horizon}")
-        if req.profile.portfolio: parts.append(f"stated portfolio size: {req.profile.portfolio}")
+        if req.profile.risk:
+            parts.append(f"risk tolerance: {req.profile.risk}")
+        if req.profile.goal:
+            parts.append(f"investment goal: {req.profile.goal}")
+        if req.profile.horizon:
+            parts.append(f"time horizon: {req.profile.horizon}")
+        if req.profile.portfolio:
+            parts.append(f"stated portfolio size: {req.profile.portfolio}")
         lines.append("User profile — " + ", ".join(parts) + ".")
     if req.holdings:
         total = sum(h.value for h in req.holdings)
@@ -289,13 +352,16 @@ def build_message(req: ChatRequest) -> str:
             f"{h.ticker} (${h.value:,.0f}, {round(h.value / total * 100)}%)"
             for h in req.holdings
         ]
-        lines.append(f"Current portfolio (total ${total:,.0f}): " + ", ".join(parts) + ".")
+        lines.append(
+            f"Current portfolio (total ${total:,.0f}): " + ", ".join(parts) + "."
+        )
     if lines:
         return "\n".join(lines) + "\n\n" + req.message
     return req.message
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @app.get(
     "/",
@@ -328,7 +394,7 @@ def market_data():
         print("Returning cached market data")
         return market_cache["data"]
     data = build_market_data()
-    market_cache["data"]       = data
+    market_cache["data"] = data
     market_cache["fetched_at"] = now
     return data
 
@@ -352,34 +418,40 @@ stock-specific investment advice so recommendations are grounded in real data.
     tags=["Stock Data"],
 )
 def stock_detail(
-    ticker: str = Path(description="Stock ticker symbol e.g. NVDA, AAPL, MSFT")
+    ticker: str = Path(description="Stock ticker symbol e.g. NVDA, AAPL, MSFT"),
 ):
     sym = ticker.upper()
     try:
-        q      = fh_get("/quote", {"symbol": sym})
-        close  = q.get("c") or 0
-        open_  = q.get("o") or close
-        high   = q.get("h") or close
-        low    = q.get("l") or close
+        q = fh_get("/quote", {"symbol": sym})
+        close = q.get("c") or 0
+        open_ = q.get("o") or close
+        high = q.get("h") or close
+        low = q.get("l") or close
         prev_c = q.get("pc") or close
-        chg    = _pct(close, prev_c)
+        chg = _pct(close, prev_c)
 
-        low52 = low; high52 = high
+        low52 = low
+        high52 = high
         try:
-            m      = fh_get("/stock/metric", {"symbol": sym, "metric": "all"})
+            m = fh_get("/stock/metric", {"symbol": sym, "metric": "all"})
             metric = m.get("metric", {})
-            low52  = metric.get("52WeekLow")  or low
+            low52 = metric.get("52WeekLow") or low
             high52 = metric.get("52WeekHigh") or high
         except Exception:
             pass
 
         vol_str = "—"
         try:
-            now_ts   = int(time.time())
-            candles  = fh_get("/stock/candle", {
-                "symbol": sym, "resolution": "D",
-                "from": now_ts - 86_400, "to": now_ts
-            })
+            now_ts = int(time.time())
+            candles = fh_get(
+                "/stock/candle",
+                {
+                    "symbol": sym,
+                    "resolution": "D",
+                    "from": now_ts - 86_400,
+                    "to": now_ts,
+                },
+            )
             vols = candles.get("v", [])
             if vols:
                 vol_str = fmt_volume(vols[-1])
@@ -387,15 +459,15 @@ def stock_detail(
             pass
 
         return StockDetailResponse(
-            ticker     = sym,
-            price      = round(close, 2),
-            change_pct = chg,
-            open       = round(open_,  2),
-            prevClose  = round(prev_c, 2),
-            low52      = round(low52,  2),
-            high52     = round(high52, 2),
-            volume     = vol_str,
-            sparkline  = build_sparkline(open_, close, high, low, sym),
+            ticker=sym,
+            price=round(close, 2),
+            change_pct=chg,
+            open=round(open_, 2),
+            prevClose=round(prev_c, 2),
+            low52=round(low52, 2),
+            high52=round(high52, 2),
+            volume=vol_str,
+            sparkline=build_sparkline(open_, close, high, low, sym),
         )
     except Exception as e:
         print(f"Stock detail error ({sym}): {e}")
@@ -421,20 +493,22 @@ significantly up or down.
     tags=["Stock Data"],
 )
 def stock_news(
-    ticker: str = Path(description="Stock ticker symbol e.g. NVDA, AAPL, MSFT")
+    ticker: str = Path(description="Stock ticker symbol e.g. NVDA, AAPL, MSFT"),
 ):
-    sym       = ticker.upper()
-    today     = time.strftime("%Y-%m-%d")
+    sym = ticker.upper()
+    today = time.strftime("%Y-%m-%d")
     month_ago = time.strftime("%Y-%m-%d", time.localtime(time.time() - 30 * 86_400))
     try:
-        articles = fh_get("/company-news", {"symbol": sym, "from": month_ago, "to": today})
+        articles = fh_get(
+            "/company-news", {"symbol": sym, "from": month_ago, "to": today}
+        )
         out = [
             NewsArticle(
-                headline = a.get("headline", ""),
-                summary  = a.get("summary",  ""),
-                url      = a.get("url",      ""),
-                source   = a.get("source",   ""),
-                datetime = a.get("datetime", 0),
+                headline=a.get("headline", ""),
+                summary=a.get("summary", ""),
+                url=a.get("url", ""),
+                source=a.get("source", ""),
+                datetime=a.get("datetime", 0),
             )
             for a in articles[:10]
         ]
@@ -463,7 +537,7 @@ than speculation.
     tags=["Stock Data"],
 )
 def stock_recommendation(
-    ticker: str = Path(description="Stock ticker symbol e.g. NVDA, AAPL, MSFT")
+    ticker: str = Path(description="Stock ticker symbol e.g. NVDA, AAPL, MSFT"),
 ):
     sym = ticker.upper()
     try:
@@ -474,17 +548,19 @@ def stock_recommendation(
         return RecommendationResponse(
             ticker=sym,
             recommendation=RecommendationData(
-                period     = latest.get("period",     ""),
-                strongBuy  = latest.get("strongBuy",  0),
-                buy        = latest.get("buy",        0),
-                hold       = latest.get("hold",       0),
-                sell       = latest.get("sell",       0),
-                strongSell = latest.get("strongSell", 0),
-            )
+                period=latest.get("period", ""),
+                strongBuy=latest.get("strongBuy", 0),
+                buy=latest.get("buy", 0),
+                hold=latest.get("hold", 0),
+                sell=latest.get("sell", 0),
+                strongSell=latest.get("strongSell", 0),
+            ),
         )
     except Exception as e:
         print(f"Recommendation error ({sym}): {e}")
-        raise HTTPException(status_code=404, detail=f"Could not fetch recommendations for {sym}")
+        raise HTTPException(
+            status_code=404, detail=f"Could not fetch recommendations for {sym}"
+        )
 
 
 @app.get(
@@ -505,11 +581,11 @@ Apple?", "Give me alternatives to Tesla in the EV space."
     tags=["Stock Data"],
 )
 def stock_peers(
-    ticker: str = Path(description="Stock ticker symbol e.g. NVDA, AAPL, MSFT")
+    ticker: str = Path(description="Stock ticker symbol e.g. NVDA, AAPL, MSFT"),
 ):
     sym = ticker.upper()
     try:
-        peers    = fh_get("/stock/peers", {"symbol": sym})
+        peers = fh_get("/stock/peers", {"symbol": sym})
         filtered = [p for p in peers if p != sym][:8]
         return PeersResponse(ticker=sym, peers=filtered)
     except Exception as e:
@@ -555,12 +631,12 @@ multiple messages to maintain conversation memory within the same thread.
     tags=["Chat"],
 )
 def chat(req: ChatRequest):
-    token     = get_iam_token()
+    token = get_iam_token()
     thread_id = thread_store.get(req.session_id)
 
     body = {
-        "message":  {"role": "user", "content": build_message(req)},
-        "agent_id": AGENT_ID
+        "message": {"role": "user", "content": build_message(req)},
+        "agent_id": AGENT_ID,
     }
     if thread_id:
         body["thread_id"] = thread_id
@@ -573,11 +649,11 @@ def chat(req: ChatRequest):
             url,
             headers={
                 "Authorization": f"Bearer {token}",
-                "Content-Type":  "application/json",
-                "Accept":        "application/json"
+                "Content-Type": "application/json",
+                "Accept": "application/json",
             },
             json=body,
-            timeout=60
+            timeout=60,
         )
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Connection error: {str(e)}")
@@ -585,9 +661,9 @@ def chat(req: ChatRequest):
     if response.status_code != 200:
         raise HTTPException(status_code=response.status_code, detail=response.text)
 
-    data          = response.json()
+    data = response.json()
     new_thread_id = data.get("thread_id")
-    run_id        = data.get("run_id")
+    run_id = data.get("run_id")
     if not run_id:
         raise HTTPException(status_code=500, detail=f"No run_id returned: {data}")
 
@@ -599,25 +675,34 @@ def chat(req: ChatRequest):
         try:
             poll_response = requests.get(
                 poll_url,
-                headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
-                timeout=30
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                },
+                timeout=30,
             )
         except requests.exceptions.RequestException as e:
             raise HTTPException(status_code=500, detail=f"Polling error: {str(e)}")
 
         if poll_response.status_code != 200:
-            raise HTTPException(status_code=poll_response.status_code, detail=poll_response.text)
+            raise HTTPException(
+                status_code=poll_response.status_code, detail=poll_response.text
+            )
 
         poll_data = poll_response.json()
-        status    = poll_data.get("status")
-        print(f"Poll {i+1}: status = {status}")
+        status = poll_data.get("status")
+        print(f"Poll {i + 1}: status = {status}")
 
         if status == "completed":
             try:
-                reply = poll_data["result"]["data"]["message"]["content"][0].get("text", "No response")
+                reply = poll_data["result"]["data"]["message"]["content"][0].get(
+                    "text", "No response"
+                )
             except (KeyError, IndexError, TypeError):
                 reply = "No response"
-            return ChatResponse(session_id=req.session_id, reply=reply, thread_id=new_thread_id)
+            return ChatResponse(
+                session_id=req.session_id, reply=reply, thread_id=new_thread_id
+            )
 
         elif status == "failed":
             print("Run failed:", poll_data)
