@@ -50,7 +50,11 @@ All market data is sourced from Finnhub (finnhub.io) in real-time.
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "https://watsonx-hackathon.vercel.app"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://watsonx-hackathon-git-main-carden-dangs-projects.vercel.app",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
