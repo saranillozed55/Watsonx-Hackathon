@@ -16,7 +16,7 @@ async function fetchMarketData() {
     return _marketDataCache;
   }
   try {
-    const res = await fetch('${API}/api/market-data');
+    const res = await fetch(`${API}/api/market-data`);
     if (!res.ok) throw new Error(`Market data error: ${res.status}`);
     const data = await res.json();
     _marketDataCache = data;
@@ -44,7 +44,7 @@ async function sendToBackend(sessionId, message) {
   const storedProfile  = localStorage.getItem("userProfile");
   const storedHoldings = localStorage.getItem("portfolio");
  
-  const res = await fetch('${API}/chat', {
+  const res = await fetch(`${API}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -632,7 +632,7 @@ export default function FinanceAI() {
     let currentSessionId = sessionId;
 
     if (!currentSessionId) {
-      const sessionRes = await fetch('${API}/new-session', {
+      const sessionRes = await fetch(`${API}/new-session`, {
         method: "POST",
       });
 

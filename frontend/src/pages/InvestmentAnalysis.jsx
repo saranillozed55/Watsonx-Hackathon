@@ -259,58 +259,49 @@ Given the investor profile above, a clear Buy / Hold / Reduce recommendation wit
 
 Be concise, specific, and data-driven. No generic disclaimers.`;
 
-    async function runAnalysis() {
-      let sessionId = localStorage.getItem("sessionId");
-      if (!sessionId) {
-        try {
-          const r = await fetch(`${API}/chat`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              session_id: sessionId,
-              message:    prompt,
-              profile:    storedProfile  ? JSON.parse(storedProfile)  : null,
-              holdings:   storedHoldings ? JSON.parse(storedHoldings) : null,
-          }),
-        });
-          const d = await r.json();
-          console.log("Analysis response:", d);  // ← add this to debug
-          if (d?.reply) {
-            setText(d.reply);
-            setError(false);
-          } else {
-            setText("");
-            setError(true);
-          }
-        } catch (err) {
-          console.error("Analysis error:", err);
-          setError(true);
-        }
-      }
-
-      const storedProfile  = localStorage.getItem("userProfile");
-      const storedHoldings = localStorage.getItem("portfolio");
-
-      try {
-        const r = await fetch(`${API}/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            session_id: sessionId,
-            message:    prompt,
-            profile:    storedProfile  ? JSON.parse(storedProfile)  : null,
-            holdings:   storedHoldings ? JSON.parse(storedHoldings) : null,
-          }),
-        });
-        const d = await r.json();
-        setText(d?.reply || "Analysis unavailable.");
-      } catch {
-        setText("Failed to load analysis.");
-      }
-
-      setFetched(ticker);
+async function runAnalysis() {
+  let sessionId = localStorage.getItem("sessionId");
+  if (!sessionId) {
+    try {
+      const s  = await fetch(`${API}/new-session`, { method: "POST" });
+      const sd = await s.json();
+      sessionId = sd.session_id;
+      localStorage.setItem("sessionId", sessionId);
+    } catch {
+      setError(true);
       setLoading(false);
+      return;
     }
+  }
+
+  const storedProfile  = localStorage.getItem("userProfile");
+  const storedHoldings = localStorage.getItem("portfolio");
+
+  try {
+    const r = await fetch(`${API}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId,
+        message:    prompt,
+        profile:    storedProfile  ? JSON.parse(storedProfile)  : null,
+        holdings:   storedHoldings ? JSON.parse(storedHoldings) : null,
+      }),
+    });
+    const d = await r.json();
+    if (d?.reply) {
+      setText(d.reply);
+      setError(false);
+    } else {
+      setError(true);
+    }
+  } catch {
+    setError(true);
+  }
+
+  setFetched(ticker);
+  setLoading(false);
+}
 
     runAnalysis();
   }, [ticker]);
