@@ -435,6 +435,14 @@ function Ticker() {
     </div>
   );
 
+  const STATUS = {
+    "open":        { label: "MARKETS OPEN",  cls: " open",        dot: " open"        },
+    "pre-market":  { label: "PRE-MARKET",    cls: " pre-market",  dot: " pre-market"  },
+    "after-hours": { label: "AFTER HOURS",   cls: " after-hours", dot: " after-hours" },
+    "closed":      { label: "MARKETS CLOSED", cls: "",            dot: ""             },
+  };
+  const s = STATUS[data?.marketStatus] ?? STATUS["closed"];
+
   return (
     <div className="ticker-bar">
       <span className="ticker-left">FinanceAI</span>
@@ -444,9 +452,9 @@ function Ticker() {
         <Item label="BTC"  item={data?.btc}  />
         <Item label="GOLD" item={data?.gold} />
       </div>
-      <div className={`markets-badge${data?.marketOpen ? " open" : ""}`}>
-        <div className={`markets-dot${data?.marketOpen ? " open" : ""}`} />
-        {data ? (data.marketOpen ? "MARKETS OPEN" : "MARKETS CLOSED") : "—"}
+      <div className={`markets-badge${s.cls}`}>
+        <div className={`markets-dot${s.dot}`} />
+        {data ? s.label : "—"}
       </div>
     </div>
   );

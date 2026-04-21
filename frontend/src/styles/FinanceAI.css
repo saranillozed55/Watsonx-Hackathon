@@ -106,6 +106,13 @@ textarea, input { font-family: inherit; }
 .markets-dot.open { background: var(--green); animation: blink 2s ease-in-out infinite; }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
+/* Market Status */
+
+.markets-badge.pre-market  { color: #f4c542; border-color: rgba(244,197,66,0.3); }
+.markets-badge.after-hours { color: #ff9800; border-color: rgba(255,152,0,0.3); }
+.markets-dot.pre-market    { background: #f4c542; }
+.markets-dot.after-hours   { background: #ff9800; animation: blink 2s ease-in-out infinite; }
+
 /* ── Layout ───────────────────────────────────────────────── */
 .body-row { display: flex; flex: 1; overflow: hidden; }
 
