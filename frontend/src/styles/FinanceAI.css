@@ -501,6 +501,83 @@ textarea, input { font-family: inherit; }
 .chat-input-inner { max-width: 560px; margin: 0 auto; }
 .footer-disc      { max-width: 560px; margin: 6px auto 0; font-size: 9px; color: var(--text-muted); text-align: center; letter-spacing: 0.04em; }
 
+/* ── Recent items — navigable, with delete button ─────────── */
+.recent-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 6px 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 0 6px;
+  transition: color 0.15s, background 0.15s;
+  gap: 4px;
+}
+.recent-item:hover  { color: var(--text-dim); background: var(--surface2); }
+.recent-item.active { color: var(--text); background: var(--surface); border: 1px solid var(--border-light); }
+ 
+.recent-item-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+ 
+/* Delete (×) button — hidden until row is hovered */
+.recent-delete-btn {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--red);          /* always red */
+  background: none;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  padding: 0;
+}
+.recent-item:hover .recent-delete-btn { opacity: 1; }
+.recent-delete-btn:hover {
+  background: rgba(248, 113, 113, 0.18);
+}
+ 
+.recent-empty {
+  padding: 6px 14px;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+ 
+/* ── Locked state for topics and new-conv while agent runs ─── */
+.topic-locked {
+  opacity: 0.45;
+  cursor: not-allowed !important;
+  pointer-events: none;  /* prevent clicks entirely */
+}
+ 
+/* Show a subtle "busy" pulse on the active topic while locked */
+.topic-item.active.topic-locked {
+  animation: topic-busy 1.4s ease-in-out infinite;
+}
+@keyframes topic-busy {
+  0%, 100% { opacity: 0.45; }
+  50%       { opacity: 0.65; }
+}
+ 
+.new-conv-btn.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+ 
 /* ── Markdown message rendering ─────────────────────────────────────────── */
 .msg-markdown {
   line-height: 1.65;

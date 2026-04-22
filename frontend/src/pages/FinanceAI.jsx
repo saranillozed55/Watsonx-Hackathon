@@ -2,19 +2,16 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import "../styles/FinanceAI.css";
 import OnboardingModal from "../components/OnboardingModal";
 import PortfolioPanel from "../components/PortfolioPanel";
-import { marked } from "marked"; // Chatbot response styling
+import { marked } from "marked";
 import InvestmentAnalysis from "./InvestmentAnalysis";
 import API from "../config";
-
+ 
 let _marketDataCache = null;
 let _marketDataFetchedAt = 0;
  
 async function fetchMarketData() {
   const now = Date.now();
-  // 65-second client-side cache (backend caches 60s, we add 5s buffer)
-  if (_marketDataCache && now - _marketDataFetchedAt < 65_000) {
-    return _marketDataCache;
-  }
+  if (_marketDataCache && now - _marketDataFetchedAt < 65_000) return _marketDataCache;
   try {
     const res = await fetch(`${API}/api/market-data`);
     if (!res.ok) throw new Error(`Market data error: ${res.status}`);
@@ -30,16 +27,14 @@ async function fetchMarketData() {
  
 async function fetchTickerData() {
   const data = await fetchMarketData();
-  if (!data) return null;
-  return data.ticker;   // { spx, ndx, btc, gold, marketOpen }
+  return data?.ticker ?? null;
 }
  
 async function fetchMarketSnapshot() {
   const data = await fetchMarketData();
-  if (!data) return null;
-  return data.snapshot; // [ { name, value, change, up }, ... ]
+  return data?.snapshot ?? null;
 }
-
+ 
 async function sendToBackend(sessionId, message) {
   const storedProfile  = localStorage.getItem("userProfile");
   const storedHoldings = localStorage.getItem("portfolio");
@@ -59,22 +54,23 @@ async function sendToBackend(sessionId, message) {
     const errText = await res.text();
     throw new Error(errText || `Backend error: ${res.status}`);
   }
-  return await res.json();
+  return res.json();
 }
+ 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTS
 // ─────────────────────────────────────────────────────────────────────────────
-
+ 
 const SIDEBAR_TOPICS = [
   { label: "Portfolio Strategy",  key: "portfolio" },
-  { label: "Stock Analysis",       key: "stocks"    },
-  { label: "ETFs & Index Funds",   key: "etf"       },
-  { label: "Crypto Assets",        key: "crypto"    },
-  { label: "Bonds & Fixed Income", key: "bonds"     },
+  { label: "Stock Analysis",      key: "stocks"    },
+  { label: "ETFs & Index Funds",  key: "etf"       },
+  { label: "Crypto Assets",       key: "crypto"    },
+  { label: "Bonds & Fixed Income",key: "bonds"     },
   { label: "Risk Management",     key: "risk"      },
-  { label: "Tax & Retirement",     key: "tax"       },
+  { label: "Tax & Retirement",    key: "tax"       },
 ];
-
+ 
 const TOPIC_QUERIES = {
   portfolio: "portfolio strategy",
   stocks:    "stock analysis",
@@ -84,14 +80,14 @@ const TOPIC_QUERIES = {
   risk:      "how to manage investment risk",
   tax:       "tax and retirement",
 };
-
+ 
 const HOME_SUGGESTIONS = [
   "portfolio strategy",
   "stock analysis",
   "risk management",
   "ETFs vs index funds",
 ];
-
+ 
 const PLACEHOLDERS = [
   "how can I help you today?",
   "ask me about your portfolio...",
@@ -100,11 +96,11 @@ const PLACEHOLDERS = [
   "ask about a stock...",
   "how do I beat inflation?",
 ];
-
+ 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
-
+ 
 function getTime() {
   return new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
@@ -125,17 +121,17 @@ function getFileIcon(name) {
   if (["jpg","jpeg","png","gif","webp","svg"].includes(ext)) return "🖼️";
   if (ext === "pdf")  return "📄";
   if (["csv","xlsx","xls"].includes(ext)) return "📊";
-  if (["txt","md"].includes(ext)) return "📝";
+  if (["txt","md"].includes(ext))  return "📝";
   if (ext === "json") return "🗂️";
   return "📁";
 }
-
+ 
 // ─────────────────────────────────────────────────────────────────────────────
-// CANVAS CHART — renders data returned by your API
+// CANVAS CHART
 // ─────────────────────────────────────────────────────────────────────────────
-
+ 
 const chartDataCache = {};
-
+ 
 function drawChartBase(el, data, lineColor) {
   const W = el.offsetWidth || 500, H = 150;
   el.width = W; el.height = H;
@@ -145,7 +141,7 @@ function drawChartBase(el, data, lineColor) {
   const mn = Math.min(...data), mx = Math.max(...data), rng = mx - mn || 1;
   const xOf = i => P.l + i / (data.length - 1) * cW;
   const yOf = v => P.t + cH - (v - mn) / rng * cH;
-
+ 
   const grad = ctx.createLinearGradient(0, P.t, 0, P.t + cH);
   if (lineColor === "#4ade80") {
     grad.addColorStop(0, "rgba(74,222,128,0.28)");
@@ -156,7 +152,7 @@ function drawChartBase(el, data, lineColor) {
     grad.addColorStop(0.75, "rgba(248,113,113,0.04)");
     grad.addColorStop(1, "rgba(248,113,113,0)");
   }
-
+ 
   ctx.beginPath();
   ctx.moveTo(xOf(0), yOf(data[0]));
   for (let i = 1; i < data.length; i++) {
@@ -166,40 +162,34 @@ function drawChartBase(el, data, lineColor) {
   ctx.lineTo(xOf(data.length - 1), P.t + cH);
   ctx.lineTo(xOf(0), P.t + cH);
   ctx.closePath();
-  ctx.fillStyle = grad;
-  ctx.fill();
-
+  ctx.fillStyle = grad; ctx.fill();
+ 
   ctx.beginPath();
-  ctx.strokeStyle = lineColor;
-  ctx.lineWidth = 1.8;
-  ctx.lineJoin = "round";
+  ctx.strokeStyle = lineColor; ctx.lineWidth = 1.8; ctx.lineJoin = "round";
   ctx.moveTo(xOf(0), yOf(data[0]));
   for (let i = 1; i < data.length; i++) {
     const cx = (xOf(i-1) + xOf(i)) / 2;
     ctx.bezierCurveTo(cx, yOf(data[i-1]), cx, yOf(data[i]), xOf(i), yOf(data[i]));
   }
   ctx.stroke();
-
+ 
   for (let t = 0; t <= 3; t++) {
     const v = mn + rng * (t / 3), y = yOf(v);
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(255,255,255,0.04)";
-    ctx.lineWidth = 1; ctx.setLineDash([]);
+    ctx.strokeStyle = "rgba(255,255,255,0.04)"; ctx.lineWidth = 1; ctx.setLineDash([]);
     ctx.moveTo(P.l, y); ctx.lineTo(W - P.r, y); ctx.stroke();
-    ctx.fillStyle = "#555";
-    ctx.font = "9px IBM Plex Mono";
-    ctx.textAlign = "left";
+    ctx.fillStyle = "#555"; ctx.font = "9px IBM Plex Mono"; ctx.textAlign = "left";
     ctx.fillText("$" + parseFloat(v).toFixed(0), W - P.r + 3, y + 3);
   }
   return { xOf, yOf, P, W, H };
 }
-
+ 
 function StockChart({ stockId, stockData, initRange = "1D" }) {
   const canvasRef = useRef(null);
   const tipRef    = useRef(null);
   const [range, setRange] = useState(initRange);
   const stateRef  = useRef({});
-
+ 
   const render = useCallback((r) => {
     const el = canvasRef.current; if (!el) return;
     const data   = stockData?.chartData?.[r]   || [];
@@ -210,9 +200,9 @@ function StockChart({ stockId, stockData, initRange = "1D" }) {
     drawChartBase(el, data, lc);
     stateRef.current = { data, labels, lc };
   }, [stockData]);
-
+ 
   useEffect(() => { render(range); }, [range, render]);
-
+ 
   function handleMouseMove(e) {
     const el = canvasRef.current; if (!el) return;
     const { data, labels, lc } = stateRef.current; if (!data?.length) return;
@@ -237,13 +227,13 @@ function StockChart({ stockId, stockData, initRange = "1D" }) {
       tipRef.current.style.top  = Math.max(P.t, py - 30) + "px";
     }
   }
-
+ 
   function handleMouseLeave() {
     const { data, lc } = stateRef.current;
     if (data?.length && canvasRef.current) drawChartBase(canvasRef.current, data, lc);
     if (tipRef.current) tipRef.current.style.display = "none";
   }
-
+ 
   return (
     <div>
       <div className="range-tabs">
@@ -253,26 +243,23 @@ function StockChart({ stockId, stockData, initRange = "1D" }) {
       </div>
       <div className="chart-outer">
         <canvas ref={canvasRef} className="chart-canvas" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave} />
-        {(!stockData?.chartData?.[range]?.length) && (
-          <div className="chart-loading">loading chart data…</div>
-        )}
+        {(!stockData?.chartData?.[range]?.length) && <div className="chart-loading">loading chart data…</div>}
         <div ref={tipRef} className="ch-tip" style={{ display: "none" }} />
       </div>
     </div>
   );
 }
-
+ 
 // ─────────────────────────────────────────────────────────────────────────────
-// STOCK CARD — all values from your API
+// STOCK CARD
 // ─────────────────────────────────────────────────────────────────────────────
-
+ 
 function StockCard({ stock, msgId }) {
   if (!stock) return null;
-  const isUp  = stock.chg  >= 0;
+  const isUp   = stock.chg  >= 0;
   const ahIsUp = stock.ahChg >= 0;
-
   const fmt = n => parseFloat(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
+ 
   return (
     <div className="stock-card">
       <div className="stock-ticker-name">{stock.ticker} · {stock.name}</div>
@@ -303,11 +290,11 @@ function StockCard({ stock, msgId }) {
     </div>
   );
 }
-
+ 
 // ─────────────────────────────────────────────────────────────────────────────
 // SMALL COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
-
+ 
 function SmileyIcon({ size = 16 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 18 18" fill="none">
@@ -317,7 +304,7 @@ function SmileyIcon({ size = 16 }) {
     </svg>
   );
 }
-
+ 
 function PaperclipIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -325,7 +312,7 @@ function PaperclipIcon() {
     </svg>
   );
 }
-
+ 
 function MicIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -336,7 +323,7 @@ function MicIcon() {
     </svg>
   );
 }
-
+ 
 function InfoCard({ card }) {
   return (
     <div className="info-card">
@@ -352,7 +339,7 @@ function InfoCard({ card }) {
     </div>
   );
 }
-
+ 
 function TypingIndicator() {
   return (
     <div className="msg-wrap">
@@ -368,7 +355,7 @@ function TypingIndicator() {
     </div>
   );
 }
-
+ 
 function Message({ msg }) {
   const isUser = msg.role === "user";
   return (
@@ -392,10 +379,7 @@ function Message({ msg }) {
             </div>
           ) : (
             <>
-              <div
-                className="msg-bubble msg-markdown"
-                dangerouslySetInnerHTML={{ __html: marked.parse(msg.paragraphs.join("\n\n")) }}
-              />
+              <div className="msg-bubble msg-markdown" dangerouslySetInnerHTML={{ __html: marked.parse(msg.paragraphs.join("\n\n")) }} />
               {msg.stock && <StockCard stock={msg.stock} msgId={msg.id} />}
               {msg.card  && <InfoCard card={msg.card} />}
             </>
@@ -405,44 +389,39 @@ function Message({ msg }) {
     </div>
   );
 }
-
+ 
 // ─────────────────────────────────────────────────────────────────────────────
-// TICKER COMPONENT — values from API
+// TICKER
 // ─────────────────────────────────────────────────────────────────────────────
-
+ 
 function Ticker() {
   const [data, setData] = useState(null);
-
+ 
   useEffect(() => {
     fetchTickerData().then(d => { if (d) setData(d); });
-    const id = setInterval(() => {
-      fetchTickerData().then(d => { if (d) setData(d); });
-    }, 60_000);
+    const id = setInterval(() => { fetchTickerData().then(d => { if (d) setData(d); }); }, 60_000);
     return () => clearInterval(id);
   }, []);
-
+ 
   const Item = ({ label, item }) => (
     <div className="tick-item">
       <span className="tick-label">{label}</span>
       {item ? (
-        <>
-          <span className={item.up ? "tick-up" : "tick-dn"}>{item.up ? "▲" : "▼"}</span>
-          <span className="tick-val">{item.value}</span>
-        </>
+        <><span className={item.up ? "tick-up" : "tick-dn"}>{item.up ? "▲" : "▼"}</span><span className="tick-val">{item.value}</span></>
       ) : (
         <span className="tick-val" style={{ color: "var(--text-muted)" }}>—</span>
       )}
     </div>
   );
-
+ 
   const STATUS = {
-    "open":        { label: "MARKETS OPEN",  cls: " open",        dot: " open"        },
-    "pre-market":  { label: "PRE-MARKET",    cls: " pre-market",  dot: " pre-market"  },
-    "after-hours": { label: "AFTER HOURS",   cls: " after-hours", dot: " after-hours" },
-    "closed":      { label: "MARKETS CLOSED", cls: "",            dot: ""             },
+    "open":        { label: "MARKETS OPEN",   cls: " open",        dot: " open"        },
+    "pre-market":  { label: "PRE-MARKET",     cls: " pre-market",  dot: " pre-market"  },
+    "after-hours": { label: "AFTER HOURS",    cls: " after-hours", dot: " after-hours" },
+    "closed":      { label: "MARKETS CLOSED", cls: "",             dot: ""             },
   };
   const s = STATUS[data?.marketStatus] ?? STATUS["closed"];
-
+ 
   return (
     <div className="ticker-bar">
       <span className="ticker-left">FinanceAI</span>
@@ -459,22 +438,20 @@ function Ticker() {
     </div>
   );
 }
-
+ 
 // ─────────────────────────────────────────────────────────────────────────────
-// MARKET SNAPSHOT — values from API
+// MARKET SNAPSHOT
 // ─────────────────────────────────────────────────────────────────────────────
-
+ 
 function MarketSnapshot() {
   const [rows, setRows] = useState(null);
-
+ 
   useEffect(() => {
     fetchMarketSnapshot().then(d => { if (d) setRows(d); });
-    const id = setInterval(() => {
-      fetchMarketSnapshot().then(d => { if (d) setRows(d); });
-    }, 60_000);
+    const id = setInterval(() => { fetchMarketSnapshot().then(d => { if (d) setRows(d); }); }, 60_000);
     return () => clearInterval(id);
   }, []);
-
+ 
   return (
     <div className="market-snapshot">
       <div className="snapshot-title">Market Snapshot</div>
@@ -497,34 +474,62 @@ function MarketSnapshot() {
     </div>
   );
 }
-
+ 
+// ─────────────────────────────────────────────────────────────────────────────
+// CONVERSATION STORAGE HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+ 
+const MAX_CONVERSATIONS    = 8;
+const MAX_MESSAGES_PER_CONV = 30;
+ 
+function loadConvsFromStorage() {
+  try { return JSON.parse(localStorage.getItem("conversations") || "[]"); }
+  catch { return []; }
+}
+ 
+function saveConvsToStorage(convs) {
+  try {
+    const lean = convs.map(c => ({
+      ...c,
+      messages: c.messages.slice(-MAX_MESSAGES_PER_CONV).map(m => ({
+        ...m,
+        imageDataUrl: m.imageDataUrl ? "[image]" : null,
+      })),
+    }));
+    localStorage.setItem("conversations", JSON.stringify(lean));
+  } catch {
+    localStorage.removeItem("conversations");
+  }
+}
+ 
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
-
+ 
 export default function FinanceAI() {
-  const [messages,    setMessages]    = useState([]);
-  const [chatInput,   setChatInput]   = useState("");
-  const [homeInput,   setHomeInput]   = useState("");
-  const [typing,      setTyping]      = useState(false);
-  const [chatStarted, setChatStarted] = useState(false);
-  const [activeTopic, setActiveTopic] = useState("tax");
-  const [phIdx,       setPhIdx]       = useState(0);
-  const [phVisible,   setPhVisible]   = useState(true);
-  const [dropActive,  setDropActive]  = useState(false);
-  const [attachment,  setAttachment]  = useState(null);
-  const [isRecording, setIsRecording] = useState(false);  
-  const [sessionId, setSessionId] = useState(() => localStorage.getItem("sessionId"));
-  const [userProfile, setUserProfile] = useState(() => {
-    const stored = localStorage.getItem("userProfile");
-    return stored ? JSON.parse(stored) : null;
+  const [messages,      setMessages]      = useState([]);
+  const [chatInput,     setChatInput]     = useState("");
+  const [homeInput,     setHomeInput]     = useState("");
+  const [typing,        setTyping]        = useState(false);
+  const [chatStarted,   setChatStarted]   = useState(false);
+  const [activeTopic,   setActiveTopic]   = useState(null);
+  const [phIdx,         setPhIdx]         = useState(0);
+  const [phVisible,     setPhVisible]     = useState(true);
+  const [dropActive,    setDropActive]    = useState(false);
+  const [attachment,    setAttachment]    = useState(null);
+  const [isRecording,   setIsRecording]   = useState(false);
+  const [activeTab,     setActiveTab]     = useState("chat");
+  const [sessionId,     setSessionId]     = useState(() => localStorage.getItem("sessionId") || null);
+  const [conversations, setConversations] = useState(() => loadConvsFromStorage());
+  const [userProfile,   setUserProfile]   = useState(() => {
+    const s = localStorage.getItem("userProfile");
+    return s ? JSON.parse(s) : null;
   });
   const [holdings, setHoldings] = useState(() => {
-    const saved = localStorage.getItem("portfolio");
-    return saved ? JSON.parse(saved) : [];
+    const s = localStorage.getItem("portfolio");
+    return s ? JSON.parse(s) : [];
   });
-  const [activeTab, setActiveTab] = useState("chat");
-
+ 
   const msgCounter     = useRef(0);
   const dragCounter    = useRef(0);
   const messagesEnd    = useRef(null);
@@ -532,7 +537,17 @@ export default function FinanceAI() {
   const fileHomeRef    = useRef(null);
   const fileChatRef    = useRef(null);
   const recognitionRef = useRef(null);
-
+  const pendingQueryRef = useRef(null);
+ 
+  // ── KEY FIX: ref-based conversation ID so closures never go stale ────────
+  // Every time we save, we use activeConvIdRef.current directly.
+  // Generating a new ID only happens when it's null (brand new conversation).
+  const activeConvIdRef = useRef(null);
+ 
+  // ── Lock prevents topic/new-conv clicks while agent is busy ─────────────
+  // Also prevents rapid clicks from queuing up multiple conversations.
+  const lockedRef = useRef(false);
+ 
   // placeholder cycling
   useEffect(() => {
     const id = setInterval(() => {
@@ -541,16 +556,100 @@ export default function FinanceAI() {
     }, 5000);
     return () => clearInterval(id);
   }, []);
-
+ 
   useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typing]);
-
+ 
+  // Fire a pending topic query after the state has fully reset to home
+  useEffect(() => {
+  if (chatStarted && pendingQueryRef.current) {
+    const query = pendingQueryRef.current;
+    pendingQueryRef.current = null;
+    send(query);
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [chatStarted, messages]);
+ 
+  // Auto-release the lock when the agent finishes (typing goes false)
+  useEffect(() => {
+    if (!typing) {
+      const t = setTimeout(() => { lockedRef.current = false; }, 500);
+      return () => clearTimeout(t);
+    }
+  }, [typing]);
+ 
   function autoResize(e) {
     e.target.style.height = "auto";
     e.target.style.height = Math.min(e.target.scrollHeight, 90) + "px";
   }
-
+ 
+  // ── Persist conversation — always upserts the SAME entry via the ref ─────
+  // Root cause of duplicates was: inside setMessages() callbacks, the closure
+  // captured a stale activeConvId state value (always null), so each save
+  // generated a fresh conv_${Date.now()} key. Using a ref fixes this.
+  function persistConversation(msgs, sid) {
+    const userMsgs = msgs.filter(m => m.role === "user");
+    if (userMsgs.length === 0) return;
+ 
+    // Assign a stable ID on first save; reuse it for every subsequent save
+    if (!activeConvIdRef.current) {
+      activeConvIdRef.current = `conv_${Date.now()}`;
+    }
+    const id    = activeConvIdRef.current;
+    const title = userMsgs[0].paragraphs[0]?.slice(0, 32) || "Conversation";
+    const conv  = { id, title, messages: msgs, sessionId: sid, timestamp: Date.now() };
+ 
+    setConversations(prev => {
+      const filtered = prev.filter(c => c.id !== id); // remove old entry for same ID
+      const updated  = [conv, ...filtered].slice(0, MAX_CONVERSATIONS);
+      saveConvsToStorage(updated);
+      return updated;
+    });
+  }
+ 
+  // ── Load a saved conversation ────────────────────────────────────────────
+  function loadConversation(conv) {
+    if (chatStarted && messages.filter(m => m.role === "user").length > 0) {
+      persistConversation(messages, sessionId);
+    }
+    activeConvIdRef.current = conv.id;
+    setMessages(conv.messages);
+    setSessionId(conv.sessionId);
+    if (conv.sessionId) localStorage.setItem("sessionId", conv.sessionId);
+    else localStorage.removeItem("sessionId");
+    setChatStarted(true);
+    setTyping(false);
+    setChatInput("");
+    setHomeInput("");
+    setAttachment(null);
+    lockedRef.current = false;
+    // Move this conversation to the top of the recents list immediately
+    setConversations(prev => {
+      const reordered = [conv, ...prev.filter(c => c.id !== conv.id)];
+      saveConvsToStorage(reordered);
+      return reordered;
+    });
+  }
+ 
+  // ── Delete a conversation ────────────────────────────────────────────────
+  function deleteConversation(e, convId) {
+    e.stopPropagation();
+    setConversations(prev => {
+      const updated = prev.filter(c => c.id !== convId);
+      saveConvsToStorage(updated);
+      return updated;
+    });
+    // If we deleted the currently open conversation, go to home
+    if (activeConvIdRef.current === convId) {
+      activeConvIdRef.current = null;
+      setChatStarted(false);
+      setMessages([]);
+      setSessionId(null);
+      localStorage.removeItem("sessionId");
+    }
+  }
+ 
   // ── File processing ──────────────────────────────────────────────────────
   function processFile(file) {
     const isImage = file.type.startsWith("image/");
@@ -569,7 +668,7 @@ export default function FinanceAI() {
       if (!chatStarted) kickoffChat();
     }
   }
-
+ 
   // ── Voice ────────────────────────────────────────────────────────────────
   function toggleMic() {
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -581,7 +680,6 @@ export default function FinanceAI() {
     rec.continuous = false; rec.interimResults = true; rec.lang = "en-US";
     recognitionRef.current = rec;
     setIsRecording(true);
-
     rec.onresult = e => {
       let final = "", interim = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -589,14 +687,13 @@ export default function FinanceAI() {
         else interim += e.results[i][0].transcript;
       }
       const txt = final || interim;
-      if (chatStarted) setChatInput(txt);
-      else setHomeInput(txt);
+      if (chatStarted) setChatInput(txt); else setHomeInput(txt);
     };
     rec.onend   = () => setIsRecording(false);
     rec.onerror = () => setIsRecording(false);
     rec.start();
   }
-
+ 
   // ── Chat flow ────────────────────────────────────────────────────────────
   function kickoffChat() {
     setChatStarted(true);
@@ -606,123 +703,127 @@ export default function FinanceAI() {
       card: null, stock: null,
     }]);
   }
-
+ 
   async function send(text) {
-  const hasText = text?.trim();
-  const hasFile = !!attachment;
-
-  if (!hasText && !hasFile) return;
-  if (typing) return;
-  if (!chatStarted) kickoffChat();
-
-  const att = attachment;
-  const id = ++msgCounter.current;
-
-  const userMsg = {
-    id,
-    role: "user",
-    time: getTime(),
-    paragraphs: hasText ? [text.trim()] : att ? [`Attached: ${att.name}`] : [],
-    imageDataUrl: att?.type === "image" ? att.dataUrl : null,
-    filePreview: att?.type === "text" ? att.content.slice(0, 400).replace(/</g, "&lt;") : null,
-    card: null,
-    stock: null,
-  };
-
-  setMessages(prev => [...prev, userMsg]);
-  setChatInput("");
-  setHomeInput("");
-  if (chatTaRef.current) chatTaRef.current.style.height = "auto";
-  setAttachment(null);
-  setTyping(true);
-
-  try {
-    let currentSessionId = sessionId;
-
-    if (!currentSessionId) {
-      const sessionRes = await fetch(`${API}/new-session`, {
-        method: "POST",
-      });
-
-      if (!sessionRes.ok) {
-        throw new Error("Failed to create session");
+    const hasText = text?.trim();
+    const hasFile = !!attachment;
+    if (!hasText && !hasFile) return;
+    if (typing) return;
+    if (!chatStarted) kickoffChat();
+ 
+    const att = attachment;
+    const id  = ++msgCounter.current;
+    const userMsg = {
+      id, role: "user", time: getTime(),
+      paragraphs: hasText ? [text.trim()] : att ? [`Attached: ${att.name}`] : [],
+      imageDataUrl: att?.type === "image" ? att.dataUrl : null,
+      filePreview:  att?.type === "text"  ? att.content.slice(0, 400).replace(/</g, "&lt;") : null,
+      card: null, stock: null,
+    };
+ 
+    setMessages(prev => [...prev, userMsg]);
+    setChatInput("");
+    setHomeInput("");
+    if (chatTaRef.current) chatTaRef.current.style.height = "auto";
+    setAttachment(null);
+    setTyping(true);
+    lockedRef.current = true;
+ 
+    try {
+      let currentSessionId = sessionId;
+      if (!currentSessionId) {
+        const sessionRes = await fetch(`${API}/new-session`, { method: "POST" });
+        if (!sessionRes.ok) throw new Error("Failed to create session");
+        const sessionData = await sessionRes.json();
+        currentSessionId = sessionData.session_id;
+        setSessionId(currentSessionId);
+        localStorage.setItem("sessionId", currentSessionId);
       }
-
-      const sessionData = await sessionRes.json();
-      currentSessionId = sessionData.session_id;
-      setSessionId(currentSessionId);
-      localStorage.setItem("sessionId", currentSessionId);
+ 
+      const data = await sendToBackend(currentSessionId, text?.trim() || "");
+      setTyping(false);
+ 
+      const rid = ++msgCounter.current;
+      setMessages(prev => {
+        const updated = [
+          ...prev,
+          { id: rid, role: "ai", time: getTime(), paragraphs: [data.reply || ""], stock: null, card: null },
+        ];
+        // persistConversation reads activeConvIdRef.current (always fresh, no closure stale issue)
+        persistConversation(updated, currentSessionId);
+        return updated;
+      });
+    } catch (err) {
+      setTyping(false);
+      const rid = ++msgCounter.current;
+      setMessages(prev => [
+        ...prev,
+        { id: rid, role: "ai", time: getTime(), paragraphs: ["Sorry, I couldn't reach the backend. Make sure it is running on port 8000."], card: null, stock: null },
+      ]);
     }
-
-    const data = await sendToBackend(currentSessionId, text?.trim() || "");
-
-    setTyping(false);
-
-    const rid = ++msgCounter.current;
-    setMessages(prev => [
-      ...prev,
-      {
-        id: rid,
-        role: "ai",
-        time: getTime(),
-        paragraphs: [data.reply || ""],
-        stock: null,
-        card: null,
-      },
-    ]);
-  } catch (err) {
-    setTyping(false);
-
-    const rid = ++msgCounter.current;
-    setMessages(prev => [
-      ...prev,
-      {
-        id: rid,
-        role: "ai",
-        time: getTime(),
-        paragraphs: ["Sorry, I couldn't reach the backend. Make sure it is running on port 8000."],
-        card: null,
-        stock: null,
-      },
-    ]);
   }
-}
+ 
+  // ── New Conversation ─────────────────────────────────────────────────────
+  function newConversation() {
+    if (lockedRef.current) return;
+    if (chatStarted && messages.filter(m => m.role === "user").length > 0) {
+      persistConversation(messages, sessionId);
+    }
+    localStorage.removeItem("sessionId");
+    activeConvIdRef.current = null;
+    setSessionId(null);
+    setChatStarted(false);
+    setMessages([]);
+    setTyping(false);
+    setChatInput("");
+    setHomeInput("");
+    setAttachment(null);
+    setActiveTopic(null);
+  }
+ 
+  // ── Topic click — new conversation + locked while agent runs ─────────────
+  function handleTopicClick(topicKey) {
+  if (lockedRef.current) return;
+  lockedRef.current = true;
 
-  function resetChat() {
+  setActiveTopic(topicKey);
+  if (chatStarted && messages.filter(m => m.role === "user").length > 0) {
+    persistConversation(messages, sessionId);
+  }
+
   localStorage.removeItem("sessionId");
-  localStorage.removeItem("portfolio");
-  setHoldings([]);
+  activeConvIdRef.current = null;
   setSessionId(null);
-  setChatStarted(false);
-  setMessages([]);
   setTyping(false);
   setChatInput("");
   setHomeInput("");
   setAttachment(null);
-  Object.keys(chartDataCache).forEach(k => delete chartDataCache[k]);
-}
 
+  const welcomeMsg = {
+    id: 0, role: "ai", time: getTime(),
+    paragraphs: ["New conversation started. How can I help you with your investment strategy today?"],
+    card: null, stock: null,
+  };
+  setMessages([welcomeMsg]);
+  setChatStarted(true);
+  pendingQueryRef.current = TOPIC_QUERIES[topicKey];
+}
+ 
   // ── Drag & Drop ──────────────────────────────────────────────────────────
   function onDragEnter(e) { e.preventDefault(); dragCounter.current++; setDropActive(true); }
   function onDragLeave(e) { e.preventDefault(); dragCounter.current--; if (dragCounter.current <= 0) { dragCounter.current = 0; setDropActive(false); } }
   function onDragOver(e)  { e.preventDefault(); }
   function onDrop(e)      { e.preventDefault(); dragCounter.current = 0; setDropActive(false); const f = e.dataTransfer.files[0]; if (f) processFile(f); }
-
+ 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────
-
+ 
   return (
     <div className="finance-app" onDragEnter={onDragEnter} onDragLeave={onDragLeave} onDragOver={onDragOver} onDrop={onDrop}>
-
-      {/* Onboarding render */}
-      {!userProfile && (
-        <OnboardingModal
-          onComplete={(profile) => setUserProfile(profile)}
-        />
-      )}
-
-      {/* Drop overlay */}
+ 
+      {!userProfile && <OnboardingModal onComplete={(profile) => setUserProfile(profile)} />}
+ 
       <div className={`drop-overlay${dropActive ? " active" : ""}`} onClick={() => { setDropActive(false); dragCounter.current = 0; }}>
         <div className="drop-icon-wrap">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -732,31 +833,57 @@ export default function FinanceAI() {
         <div className="drop-title">Add anything</div>
         <div className="drop-sub">Drop any file here to add it to the conversation</div>
       </div>
-
+ 
       <Ticker />
-
+ 
       <div className="body-row">
-        {/* Sidebar */}
         <aside className="sidebar">
-          <button className="new-conv-btn" onClick={resetChat}>
+          <button
+            className={`new-conv-btn${lockedRef.current ? " locked" : ""}`}
+            onClick={newConversation}
+          >
             <span style={{ fontSize: "14px", color: "var(--text-dim)" }}>+</span> New Conversation
           </button>
-
+ 
           <div className="sb-section-label">Topics</div>
           {SIDEBAR_TOPICS.map(t => (
-            <div key={t.key} className={`topic-item${activeTopic === t.key ? " active" : ""}`}
-              onClick={() => { setActiveTopic(t.key); send(TOPIC_QUERIES[t.key]); }}>
+            <div
+              key={t.key}
+              className={`topic-item${activeTopic === t.key ? " active" : ""}${lockedRef.current ? " topic-locked" : ""}`}
+              onClick={() => handleTopicClick(t.key)}
+              title={lockedRef.current ? "Agent is busy — please wait" : undefined}
+            >
               <span className="topic-icon">{t.icon}</span>{t.label}
             </div>
           ))}
-
+ 
           <div className="sb-divider" />
           <div className="sb-section-label">Recent</div>
-          {/* Populate from your session/history API */}
-          {messages.filter(m => m.role === "user").slice(-3).reverse().map((m, i) => (
-            <div className="recent-item" key={i}>{m.paragraphs[0]?.slice(0, 28)}…</div>
-          ))}
-
+ 
+          {conversations.length === 0 ? (
+            <div className="recent-empty">No recent conversations</div>
+          ) : (
+            conversations.map(conv => (
+              <div
+                key={conv.id}
+                className={`recent-item${activeConvIdRef.current === conv.id ? " active" : ""}`}
+                onClick={() => loadConversation(conv)}
+                title={conv.title}
+              >
+                <span className="recent-item-title">
+                  {conv.title?.slice(0, 20)}{conv.title?.length > 20 ? "…" : ""}
+                </span>
+                <button
+                  className="recent-delete-btn"
+                  onClick={(e) => deleteConversation(e, conv.id)}
+                  title="Delete"
+                >
+                  ×
+                </button>
+              </div>
+            ))
+          )}
+ 
           <div className="sb-divider" />
           <PortfolioPanel
             onPortfolioChange={(newHoldings, analyzeMessage) => {
@@ -767,8 +894,7 @@ export default function FinanceAI() {
           <div className="sb-divider" />
           <MarketSnapshot />
         </aside>
-
-        {/* Main */}
+ 
         <div className="main">
           <div className="topbar">
             <div className="topbar-logo">
@@ -779,26 +905,15 @@ export default function FinanceAI() {
               </div>
             </div>
             <div className="topbar-tabs">
-              <button
-                className={`topbar-tab${activeTab === "chat" ? " active" : ""}`}
-                onClick={() => setActiveTab("chat")}
-              >
-                Chat
-              </button>
-              <button
-                className={`topbar-tab${activeTab === "analysis" ? " active" : ""}`}
-                onClick={() => setActiveTab("analysis")}
-              >
-                Analysis
-              </button>
+              <button className={`topbar-tab${activeTab === "chat" ? " active" : ""}`} onClick={() => setActiveTab("chat")}>Chat</button>
+              <button className={`topbar-tab${activeTab === "analysis" ? " active" : ""}`} onClick={() => setActiveTab("analysis")}>Analysis</button>
             </div>
           </div>
-
+ 
           <div className="chat-view">
             {activeTab === "analysis" ? (
-              <InvestmentAnalysis /> 
-              ) : !chatStarted ? (
-              /* ── HOME ── */
+              <InvestmentAnalysis />
+            ) : !chatStarted ? (
               <div className="home-state">
                 <div className="greeting-text">{getGreeting()}</div>
                 <div className="home-input-block">
@@ -833,14 +948,13 @@ export default function FinanceAI() {
                   {typing && <TypingIndicator />}
                   <div ref={messagesEnd} />
                 </div>
-
+ 
                 {attachment && (
                   <div className="attachment-area">
                     <div className="attachment-preview">
                       {attachment.type === "image"
                         ? <img className="att-thumb" src={attachment.dataUrl} alt="preview" />
-                        : <div className="att-thumb-icon">{getFileIcon(attachment.name)}</div>
-                      }
+                        : <div className="att-thumb-icon">{getFileIcon(attachment.name)}</div>}
                       <div className="att-info">
                         <div className="att-name">{attachment.name}</div>
                         <div className="att-meta">
@@ -851,19 +965,19 @@ export default function FinanceAI() {
                     </div>
                   </div>
                 )}
-
+ 
                 {isRecording && (
                   <div className="voice-banner">
                     <div className="voice-inner"><div className="voice-dot" /><span>Listening… click mic to stop</span></div>
                   </div>
                 )}
-
+ 
                 <div className="suggestions">
                   {HOME_SUGGESTIONS.map(s => (
                     <button key={s} className="sugg" onClick={() => send(s)}>{s}</button>
                   ))}
                 </div>
-
+ 
                 <div className="chat-input-area">
                   <div className="chat-input-inner">
                     <div className="input-row"
