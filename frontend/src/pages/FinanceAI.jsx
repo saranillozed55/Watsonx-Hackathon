@@ -787,6 +787,7 @@ export default function FinanceAI() {
   lockedRef.current = true;
 
   setActiveTopic(topicKey);
+  setActiveTab("chat");
   if (chatStarted && messages.filter(m => m.role === "user").length > 0) {
     persistConversation(messages, sessionId);
   }

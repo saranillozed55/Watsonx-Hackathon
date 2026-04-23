@@ -213,6 +213,7 @@ function AIAnalysis({ ticker, sector, stockData, recData, profile }) {
 
   useEffect(() => {
     if (!ticker || fetched === ticker) return;
+    if(!stockData) return;
     setLoading(true);
     setText("");
 
