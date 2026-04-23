@@ -1,4 +1,4 @@
-# 😊 Smiley Financial Advisor
+# 😊 Smiley Financial Advisor by Carden Dang, Zed Saranillo, Nathan Luu, Haidan Dang, Vinh Nguyen
 
 > **Personalized, AI-powered financial advisory — built for everyday investors.**
 
